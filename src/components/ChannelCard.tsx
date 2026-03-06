@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Heart, Play } from 'lucide-react';
 import { IPTVChannel } from '../types';
 
@@ -39,7 +39,7 @@ function getLogoSearchUrl(name: string): string {
   return `https://img.logo.dev/${domain}?token=pk_anonymous&size=120&format=png`;
 }
 
-const ChannelCard: React.FC<ChannelCardProps> = ({
+const ChannelCard: React.FC<ChannelCardProps> = memo(({
   channel,
   isFavorite,
   onSelect,
@@ -60,8 +60,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
   return (
     <div
       onClick={onSelect}
-      className="channel-card p-3 cursor-pointer animate-fade-in"
-      style={{ animationDelay: `${index * 30}ms` }}
+      className="channel-card p-3 cursor-pointer"
     >
       {/* Logo Container */}
       <div className="relative aspect-square rounded-xl overflow-hidden bg-muted mb-2.5 group flex items-center justify-center">
@@ -71,6 +70,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             alt={channel.name}
             className="channel-logo w-full h-full object-contain p-3 transition-transform duration-500"
             loading="lazy"
+            decoding="async"
             onError={() => setImgFailed(true)}
           />
         )}
@@ -80,6 +80,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             alt={channel.name}
             className="channel-logo w-full h-full object-contain p-3 transition-transform duration-500"
             loading="lazy"
+            decoding="async"
             onError={() => setLookupFailed(true)}
           />
         )}
@@ -135,6 +136,14 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.channel.id === nextProps.channel.id &&
+    prevProps.isFavorite === nextProps.isFavorite &&
+    prevProps.index === nextProps.index
+  );
+});
+
+ChannelCard.displayName = 'ChannelCard';
 
 export default ChannelCard;

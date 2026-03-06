@@ -1,10 +1,12 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Search, Heart, Grid3X3, List, RefreshCw, Tv, X, ArrowUp, Loader2, Mic, MicOff } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { Search, Heart, RefreshCw, Tv, X, ArrowUp, Mic, MicOff } from 'lucide-react';
 import { IPTVChannel } from '../types';
 import ChannelCard from './ChannelCard';
 import { ChannelGridSkeleton } from './ChannelCardSkeleton';
 import HeroBanner from './HeroBanner';
 import CategoryRow from './CategoryRow';
+import VirtualizedChannelGrid from './VirtualizedChannelGrid';
+import { useDebounce } from '../hooks/useDebounce';
 
 declare global {
   interface Window {
@@ -23,9 +25,8 @@ interface ChannelGalleryProps {
 }
 
 type SortOption = 'name' | 'group' | 'recent';
-type ViewMode = 'grid' | 'list';
 
-const ChannelGallery: React.FC<ChannelGalleryProps> = ({
+const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   channels,
   favorites,
   onSelect,
@@ -34,13 +35,12 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
   isLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 200);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('name');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [displayCount, setDisplayCount] = useState(80);
   const [isListening, setIsListening] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -88,7 +88,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
 
   // Grouped channels for category rows (when no search/filter)
   const categoryRows = useMemo(() => {
-    if (searchQuery || selectedGroup !== 'all' || showFavoritesOnly) return null;
+    if (debouncedSearch || selectedGroup !== 'all' || showFavoritesOnly) return null;
     const map = new Map<string, IPTVChannel[]>();
     channels.forEach(ch => {
       const group = ch.group || 'General';
@@ -98,13 +98,13 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
     return Array.from(map.entries())
       .sort((a, b) => b[1].length - a[1].length)
       .slice(0, 8);
-  }, [channels, searchQuery, selectedGroup, showFavoritesOnly]);
+  }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly]);
 
-  // Filtered channels for grid view
+  // Filtered channels — uses debounced search
   const filteredChannels = useMemo(() => {
     let result = channels;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
       result = result.filter(c =>
         c.name.toLowerCase().includes(query) ||
         c.group?.toLowerCase().includes(query) ||
@@ -125,28 +125,20 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
       }
     });
     return result;
-  }, [channels, searchQuery, selectedGroup, showFavoritesOnly, sortBy, favorites]);
+  }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly, sortBy, favorites]);
 
-  // Scroll detection
+  // Scroll detection for scroll-to-top button
   useEffect(() => {
     const handleScroll = () => {
       if (!scrollContainerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-      setShowScrollTop(scrollTop > 500);
-      if (scrollTop + clientHeight >= scrollHeight * 0.8) {
-        setDisplayCount(prev => Math.min(prev + 40, filteredChannels.length));
-      }
+      setShowScrollTop(scrollContainerRef.current.scrollTop > 500);
     };
     const container = scrollContainerRef.current;
     if (container) {
       container.addEventListener('scroll', handleScroll, { passive: true });
       return () => container.removeEventListener('scroll', handleScroll);
     }
-  }, [filteredChannels.length]);
-
-  useEffect(() => {
-    setDisplayCount(80);
-  }, [searchQuery, selectedGroup, showFavoritesOnly, sortBy]);
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -163,8 +155,8 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const displayedChannels = filteredChannels.slice(0, displayCount);
-  const showCategoryView = categoryRows && !searchQuery && selectedGroup === 'all' && !showFavoritesOnly;
+  const showCategoryView = categoryRows && !debouncedSearch && selectedGroup === 'all' && !showFavoritesOnly;
+  const useVirtualized = filteredChannels.length > 100;
 
   return (
     <div ref={scrollContainerRef} className="h-screen w-full bg-background safe-top safe-bottom overflow-y-auto scrollbar-thin">
@@ -249,7 +241,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
           <ChannelGridSkeleton count={24} />
         ) : (
           <>
-            {/* Hero Banner - featured channels */}
+            {/* Hero Banner */}
             {showCategoryView && channels.length > 0 && (
               <HeroBanner channels={channels} onSelect={handleChannelSelect} />
             )}
@@ -257,7 +249,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
             {/* Category rows or grid */}
             {showCategoryView ? (
               <>
-                {/* Favorites row */}
                 {favorites.size > 0 && (
                   <CategoryRow
                     title="❤️ Your Favorites"
@@ -287,33 +278,17 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
                       {showFavoritesOnly ? 'Favorites' : selectedGroup === 'all' ? 'All Channels' : selectedGroup}
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      {displayedChannels.length} of {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
+                      {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as SortOption)}
-                      className="px-3 py-2 rounded-xl bg-muted/50 border border-border/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    >
-                      <option value="name">Sort by Name</option>
-                      <option value="group">Sort by Group</option>
-                    </select>
-                    <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/50">
-                      <button
-                        onClick={() => setViewMode('grid')}
-                        className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      >
-                        <Grid3X3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setViewMode('list')}
-                        className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      >
-                        <List className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="px-3 py-2 rounded-xl bg-muted/50 border border-border/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="name">Sort by Name</option>
+                    <option value="group">Sort by Group</option>
+                  </select>
                 </div>
 
                 {filteredChannels.length === 0 ? (
@@ -336,32 +311,26 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
                       </button>
                     )}
                   </div>
+                ) : useVirtualized ? (
+                  <VirtualizedChannelGrid
+                    channels={filteredChannels}
+                    favorites={favorites}
+                    onSelect={handleChannelSelect}
+                    onToggleFavorite={onToggleFavorite}
+                  />
                 ) : (
-                  <>
-                    <div className={`grid gap-4 sm:gap-6 ${
-                      viewMode === 'grid'
-                        ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-8'
-                        : 'grid-cols-1'
-                    }`}>
-                      {displayedChannels.map((channel, index) => (
-                        <ChannelCard
-                          key={channel.id}
-                          channel={channel}
-                          isFavorite={favorites.has(channel.id)}
-                          onSelect={() => handleChannelSelect(channel)}
-                          onToggleFavorite={() => onToggleFavorite(channel.id)}
-                          index={index}
-                        />
-                      ))}
-                    </div>
-
-                    {displayedChannels.length < filteredChannels.length && (
-                      <div className="flex flex-col justify-center items-center py-8 gap-4">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        <p className="text-sm text-muted-foreground">Loading more channels...</p>
-                      </div>
-                    )}
-                  </>
+                  <div className="grid gap-4 sm:gap-6 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-8">
+                    {filteredChannels.map((channel, index) => (
+                      <ChannelCard
+                        key={channel.id}
+                        channel={channel}
+                        isFavorite={favorites.has(channel.id)}
+                        onSelect={() => handleChannelSelect(channel)}
+                        onToggleFavorite={() => onToggleFavorite(channel.id)}
+                        index={index}
+                      />
+                    ))}
+                  </div>
                 )}
               </>
             )}
@@ -379,6 +348,8 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = ({
       )}
     </div>
   );
-};
+});
+
+ChannelGallery.displayName = 'ChannelGallery';
 
 export default ChannelGallery;
