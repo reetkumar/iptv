@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react';
-// @ts-ignore - react-window types
-import { FixedSizeGrid as Grid } from 'react-window';
+// @ts-ignore - react-window v2 default export
+import ReactWindow from 'react-window';
+const Grid = ReactWindow.FixedSizeGrid;
 import { IPTVChannel } from '../types';
 import ChannelCard from './ChannelCard';
 
