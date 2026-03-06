@@ -32,24 +32,21 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
   if (channels.length === 0) return null;
 
   return (
-    <div className="mb-8 group/row">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h3 className="text-lg font-bold text-foreground">{title}</h3>
-        <span className="text-xs text-muted-foreground">{channels.length} channels</span>
+    <div className="mb-7 group/row">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold text-foreground">{title}</h3>
+        <span className="text-[11px] text-muted-foreground">{channels.length}</span>
       </div>
       <div className="relative">
         <button
           onClick={() => scroll('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/30 opacity-0 group-hover/row:opacity-100 transition-opacity shadow-lg hover:bg-background"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-lg bg-background/70 backdrop-blur-sm border border-border/20 opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-background/90"
         >
           <ChevronLeft className="w-4 h-4 text-foreground" />
         </button>
-        <div
-          ref={scrollRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 px-1"
-        >
+        <div ref={scrollRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
           {channels.map((channel, index) => (
-            <div key={channel.id} className="flex-shrink-0 w-36 sm:w-40 lg:w-44">
+            <div key={channel.id} className="flex-shrink-0 w-40 sm:w-44 lg:w-48">
               <ChannelCard
                 channel={channel}
                 isFavorite={favorites.has(channel.id)}
@@ -62,7 +59,7 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
         </div>
         <button
           onClick={() => scroll('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border/30 opacity-0 group-hover/row:opacity-100 transition-opacity shadow-lg hover:bg-background"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-lg bg-background/70 backdrop-blur-sm border border-border/20 opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-background/90"
         >
           <ChevronRight className="w-4 h-4 text-foreground" />
         </button>

@@ -19,85 +19,77 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ channels, onSelect }) => {
     setActiveIndex(prev => (prev - 1 + featured.length) % featured.length);
   }, [featured.length]);
 
-  // Auto-rotate every 5s
   useEffect(() => {
     if (featured.length <= 1) return;
-    const timer = setInterval(next, 5000);
+    const timer = setInterval(next, 6000);
     return () => clearInterval(timer);
   }, [next, featured.length]);
 
   if (featured.length === 0) return null;
-
   const current = featured[activeIndex];
 
   return (
-    <div className="relative w-full h-48 sm:h-56 lg:h-64 mb-6 rounded-2xl overflow-hidden group">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/30" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+    <div className="relative w-full h-44 sm:h-52 lg:h-60 mb-6 rounded-2xl overflow-hidden group bg-card/40 border border-border/20">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-card/60 to-secondary/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent" />
+
+      {/* Logo watermark */}
+      {current.logo && (
+        <div className="absolute top-4 right-6 w-16 h-16 sm:w-20 sm:h-20 opacity-20">
+          <img src={current.logo} alt="" className="w-full h-full object-contain" loading="lazy" />
+        </div>
+      )}
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-end p-6 sm:p-8">
+      <div className="absolute inset-0 flex items-end p-5 sm:p-7">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <span className="badge-live text-[10px] px-2 py-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-              LIVE
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-destructive/80 text-destructive-foreground">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive-foreground animate-pulse" />
+              Live
             </span>
             {current.group && (
-              <span className="badge-category text-[10px] px-2 py-0.5">{current.group}</span>
+              <span className="text-[10px] text-muted-foreground bg-muted/30 px-2 py-0.5 rounded">{current.group}</span>
             )}
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-foreground truncate mb-1">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-foreground truncate mb-0.5">
             {current.name}
           </h2>
           {current.language && (
-            <p className="text-sm text-muted-foreground">{current.language}</p>
+            <p className="text-xs text-muted-foreground">{current.language}</p>
           )}
         </div>
 
         <button
           onClick={() => onSelect(current)}
-          className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-premium flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-300"
+          className="flex-shrink-0 w-12 h-12 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-md"
         >
-          <Play className="w-6 h-6 text-primary-foreground ml-0.5" fill="currentColor" />
+          <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
         </button>
       </div>
 
-      {/* Logo watermark */}
-      {current.logo && (
-        <div className="absolute top-4 right-4 w-16 h-16 sm:w-20 sm:h-20 opacity-30">
-          <img src={current.logo} alt="" className="w-full h-full object-contain" loading="lazy" />
-        </div>
-      )}
-
-      {/* Navigation arrows */}
+      {/* Nav arrows */}
       {featured.length > 1 && (
         <>
-          <button
-            onClick={prev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/40 backdrop-blur-sm border border-border/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/60"
-          >
+          <button onClick={prev} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-background/50 backdrop-blur-sm border border-border/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/70">
             <ChevronLeft className="w-4 h-4 text-foreground" />
           </button>
-          <button
-            onClick={next}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/40 backdrop-blur-sm border border-border/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/60"
-          >
+          <button onClick={next} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-background/50 backdrop-blur-sm border border-border/20 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/70">
             <ChevronRight className="w-4 h-4 text-foreground" />
           </button>
         </>
       )}
 
-      {/* Dots */}
+      {/* Progress dots */}
       {featured.length > 1 && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
           {featured.map((_, i) => (
             <button
               key={i}
               onClick={() => setActiveIndex(i)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === activeIndex ? 'w-6 bg-primary' : 'w-1.5 bg-muted-foreground/40'
+              className={`h-1 rounded-full transition-all duration-300 ${
+                i === activeIndex ? 'w-5 bg-primary' : 'w-1.5 bg-muted-foreground/30'
               }`}
             />
           ))}

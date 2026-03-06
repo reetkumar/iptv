@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
-import { Search, Heart, RefreshCw, Tv, X, ArrowUp, Mic, MicOff } from 'lucide-react';
+import { Search, RefreshCw, Tv, X, ArrowUp, Mic, MicOff } from 'lucide-react';
 import { IPTVChannel } from '../types';
 import ChannelCard from './ChannelCard';
 import { ChannelGridSkeleton } from './ChannelCardSkeleton';
@@ -22,6 +22,7 @@ interface ChannelGalleryProps {
   onToggleFavorite: (id: string) => void;
   onRefresh: () => void;
   isLoading?: boolean;
+  activeView?: 'home' | 'favorites' | 'categories' | 'trending';
 }
 
 type SortOption = 'name' | 'group' | 'recent';
@@ -33,11 +34,11 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   onToggleFavorite,
   onRefresh,
   isLoading = false,
+  activeView = 'home',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 200);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -46,6 +47,9 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   const recognitionRef = useRef<any>(null);
 
   const supportsVoice = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) as boolean;
+
+  // Derive showFavoritesOnly from activeView
+  const showFavoritesOnly = activeView === 'favorites';
 
   const toggleVoiceSearch = useCallback(() => {
     if (isListening) {
@@ -86,7 +90,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     return ['all', ...sortedGroups];
   }, [channels]);
 
-  // Grouped channels for category rows (when no search/filter)
+  // Grouped channels for category rows
   const categoryRows = useMemo(() => {
     if (debouncedSearch || selectedGroup !== 'all' || showFavoritesOnly) return null;
     const map = new Map<string, IPTVChannel[]>();
@@ -100,7 +104,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       .slice(0, 8);
   }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly]);
 
-  // Filtered channels — uses debounced search
+  // Filtered channels
   const filteredChannels = useMemo(() => {
     let result = channels;
     if (debouncedSearch) {
@@ -127,7 +131,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     return result;
   }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly, sortBy, favorites]);
 
-  // Scroll detection for scroll-to-top button
   useEffect(() => {
     const handleScroll = () => {
       if (!scrollContainerRef.current) return;
@@ -155,100 +158,82 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const showCategoryView = categoryRows && !debouncedSearch && selectedGroup === 'all' && !showFavoritesOnly;
+  const showCategoryView = activeView === 'home' && categoryRows && !debouncedSearch && selectedGroup === 'all';
+  const showCategoriesGrid = activeView === 'categories';
   const useVirtualized = filteredChannels.length > 100;
 
+  // Page title
+  const pageTitle = activeView === 'home' ? 'Home' : activeView === 'favorites' ? 'Favorites' : activeView === 'trending' ? 'Trending' : 'Categories';
+
   return (
-    <div ref={scrollContainerRef} className="h-screen w-full bg-background safe-top safe-bottom overflow-y-auto scrollbar-thin">
-      {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/50">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-gradient-premium">
-                <Tv className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+    <div ref={scrollContainerRef} className="h-full w-full overflow-y-auto scrollbar-thin">
+      {/* Top bar with search */}
+      <div className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/20">
+        <div className="flex items-center gap-3 px-5 h-14">
+          <h2 className="text-lg font-bold text-foreground hidden sm:block min-w-fit">{pageTitle}</h2>
+          <div className="flex-1 max-w-lg ml-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search channels, categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`w-full pl-10 ${supportsVoice ? 'pr-20' : 'pr-10'} py-2 rounded-lg bg-muted/40 border ${isListening ? 'border-primary ring-1 ring-primary/30' : 'border-border/30'} text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-all`}
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="p-1 rounded-md hover:bg-muted/50 transition-colors">
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                {supportsVoice && (
+                  <button
+                    onClick={toggleVoiceSearch}
+                    className={`p-1.5 rounded-md transition-all ${isListening ? 'bg-primary/20 text-primary animate-pulse' : 'hover:bg-muted/50 text-muted-foreground'}`}
+                  >
+                    {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-black tracking-tight">REET TV</h1>
-                <p className="text-xs text-muted-foreground font-medium">Premium Streams</p>
-              </div>
-            </div>
-
-            <div className="flex-1 max-w-md mx-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search channels..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-10 ${supportsVoice ? 'pr-20' : 'pr-10'} py-2.5 rounded-xl bg-muted/50 border ${isListening ? 'border-accent ring-2 ring-accent/30' : 'border-border/50'} text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all`}
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="p-1 rounded-lg hover:bg-muted transition-colors">
-                      <X className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                  )}
-                  {supportsVoice && (
-                    <button
-                      onClick={toggleVoiceSearch}
-                      className={`p-1.5 rounded-lg transition-all ${isListening ? 'bg-accent/20 text-accent animate-pulse' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}
-                    >
-                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button onClick={handleRefresh} className="btn-icon" title="Refresh channels">
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                className={`btn-icon ${showFavoritesOnly ? 'bg-accent/20 border-accent/30' : ''}`}
-                title="Toggle favorites"
-              >
-                <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'text-accent fill-accent' : ''}`} />
-              </button>
             </div>
           </div>
+          <button onClick={handleRefresh} className="p-2 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors" title="Refresh">
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
 
-          {/* Filter tabs */}
-          <div className="flex items-center gap-2 pb-4 overflow-x-auto scrollbar-hide">
+        {/* Filter chips - show on categories / filtered views */}
+        {(activeView === 'categories' || activeView === 'trending' || debouncedSearch) && (
+          <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
             {groups.map((group) => (
               <button
                 key={group}
                 onClick={() => setSelectedGroup(group)}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
                   selectedGroup === group
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
               >
-                {group === 'all' ? 'All Channels' : group}
+                {group === 'all' ? 'All' : group}
               </button>
             ))}
           </div>
-        </div>
-      </header>
+        )}
+      </div>
 
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-6">
-        {/* Loading skeleton */}
+      <main className="px-5 py-5">
         {isLoading && channels.length === 0 ? (
           <ChannelGridSkeleton count={24} />
         ) : (
           <>
-            {/* Hero Banner */}
-            {showCategoryView && channels.length > 0 && (
-              <HeroBanner channels={channels} onSelect={handleChannelSelect} />
-            )}
-
-            {/* Category rows or grid */}
-            {showCategoryView ? (
+            {/* Home view: hero + category rows */}
+            {showCategoryView && (
               <>
+                {channels.length > 0 && (
+                  <HeroBanner channels={channels} onSelect={handleChannelSelect} />
+                )}
                 {favorites.size > 0 && (
                   <CategoryRow
                     title="❤️ Your Favorites"
@@ -269,14 +254,13 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
                   />
                 ))}
               </>
-            ) : (
+            )}
+
+            {/* Grid views (favorites, categories, trending, search results) */}
+            {!showCategoryView && (
               <>
-                {/* Results header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h2 className="text-lg font-bold text-foreground">
-                      {showFavoritesOnly ? 'Favorites' : selectedGroup === 'all' ? 'All Channels' : selectedGroup}
-                    </h2>
                     <p className="text-sm text-muted-foreground">
                       {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
                     </p>
@@ -284,28 +268,28 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    className="px-3 py-2 rounded-xl bg-muted/50 border border-border/50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="px-3 py-1.5 rounded-lg bg-muted/30 border border-border/30 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                   >
-                    <option value="name">Sort by Name</option>
-                    <option value="group">Sort by Group</option>
+                    <option value="name">Name</option>
+                    <option value="group">Group</option>
                   </select>
                 </div>
 
                 {filteredChannels.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mb-6">
-                      <Tv className="w-10 h-10 text-muted-foreground" />
+                    <div className="w-16 h-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-5">
+                      <Tv className="w-8 h-8 text-muted-foreground/50" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">No channels found</h3>
-                    <p className="text-muted-foreground max-w-sm">
+                    <h3 className="text-lg font-bold mb-1.5 text-foreground">No channels found</h3>
+                    <p className="text-muted-foreground text-sm max-w-xs">
                       {showFavoritesOnly
                         ? "You haven't added any favorites yet."
                         : "Try adjusting your search or filters."}
                     </p>
-                    {(searchQuery || selectedGroup !== 'all' || showFavoritesOnly) && (
+                    {(searchQuery || selectedGroup !== 'all') && (
                       <button
-                        onClick={() => { setSearchQuery(''); setSelectedGroup('all'); setShowFavoritesOnly(false); }}
-                        className="btn-primary mt-6"
+                        onClick={() => { setSearchQuery(''); setSelectedGroup('all'); }}
+                        className="mt-5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                       >
                         Clear Filters
                       </button>
@@ -319,7 +303,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
                     onToggleFavorite={onToggleFavorite}
                   />
                 ) : (
-                  <div className="grid gap-4 sm:gap-6 grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-8">
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
                     {filteredChannels.map((channel, index) => (
                       <ChannelCard
                         key={channel.id}
@@ -341,9 +325,9 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 p-4 rounded-full bg-gradient-premium shadow-lg hover:scale-110 active:scale-95 transition-all duration-300 animate-fade-in"
+          className="fixed bottom-6 right-6 z-50 p-3 rounded-xl bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary hover:scale-105 active:scale-95 transition-all duration-200 animate-fade-in"
         >
-          <ArrowUp className="w-5 h-5 text-primary-foreground" />
+          <ArrowUp className="w-4 h-4" />
         </button>
       )}
     </div>
