@@ -6,7 +6,9 @@ import { ChannelHealthService } from '../services/channelHealthService';
 import { KeyboardService } from '../services/keyboardService';
 import ChannelGallery from '../components/ChannelGallery';
 import AppSidebar, { SidebarView } from '../components/AppSidebar';
-import { Loader2, AlertCircle, Tv, RefreshCw, Menu } from 'lucide-react';
+import BottomNavBar from '../components/BottomNavBar';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { Loader2, AlertCircle, Tv, RefreshCw } from 'lucide-react';
 
 const VideoPlayer = lazy(() => import('../components/VideoPlayer'));
 const SettingsPanel = lazy(() => import('../components/SettingsPanel'));
@@ -17,6 +19,8 @@ const M3U_URL = 'https://iptv-org.github.io/iptv/countries/in.m3u';
 
 type ViewMode = 'gallery' | 'player' | 'mini';
 
+const VIEW_ORDER: SidebarView[] = ['home', 'trending', 'favorites', 'categories'];
+
 const Index: React.FC = () => {
   const [channels, setChannels] = useState<IPTVChannel[]>([]);
   const [healthyIds, setHealthyIds] = useState<Set<string> | null>(null);
@@ -26,7 +30,7 @@ const Index: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('gallery');
   const [sidebarView, setSidebarView] = useState<SidebarView>('home');
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [transitionDir, setTransitionDir] = useState<'left' | 'right' | null>(null);
 
   const [preferences, setPreferences] = useState<UserPreferences>(StorageService.getUserPreferences());
   const [showSettings, setShowSettings] = useState(false);
@@ -35,6 +39,32 @@ const Index: React.FC = () => {
   const [miniPlayerPosition, setMiniPlayerPosition] = useState({ x: 20, y: 20 });
   const [refreshKey, setRefreshKey] = useState(0);
   const healthCheckRunning = useRef(false);
+
+  // Swipe to navigate between views
+  const navigateView = useCallback((direction: 'left' | 'right') => {
+    if (viewMode !== 'gallery') return;
+    const idx = VIEW_ORDER.indexOf(sidebarView);
+    const nextIdx = direction === 'left' ? idx + 1 : idx - 1;
+    if (nextIdx >= 0 && nextIdx < VIEW_ORDER.length) {
+      setTransitionDir(direction === 'left' ? 'left' : 'right');
+      setSidebarView(VIEW_ORDER[nextIdx]);
+      setTimeout(() => setTransitionDir(null), 350);
+    }
+  }, [sidebarView, viewMode]);
+
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: () => navigateView('left'),
+    onSwipeRight: () => navigateView('right'),
+  });
+
+  // Handle view change with transition
+  const handleViewChange = useCallback((view: SidebarView) => {
+    const fromIdx = VIEW_ORDER.indexOf(sidebarView);
+    const toIdx = VIEW_ORDER.indexOf(view);
+    setTransitionDir(toIdx > fromIdx ? 'left' : 'right');
+    setSidebarView(view);
+    setTimeout(() => setTransitionDir(null), 350);
+  }, [sidebarView]);
 
   // Force dark class on mount
   useEffect(() => {
@@ -160,6 +190,13 @@ const Index: React.FC = () => {
     return channels[(currentIndex + 1) % channels.length].name;
   }, [channels, currentIndex]);
 
+  // Transition class for page content
+  const transitionClass = transitionDir === 'left'
+    ? 'animate-slide-in-left'
+    : transitionDir === 'right'
+    ? 'animate-slide-in-right'
+    : '';
+
   if (isLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-background relative overflow-hidden">
@@ -198,27 +235,11 @@ const Index: React.FC = () => {
 
   return (
     <div className="h-screen w-full overflow-hidden bg-background text-foreground flex">
-      {/* Mobile sidebar overlay */}
-      {showMobileSidebar && (
-        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setShowMobileSidebar(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative h-full w-[220px]" onClick={e => e.stopPropagation()}>
-            <AppSidebar
-              activeView={sidebarView}
-              onViewChange={(v) => { setSidebarView(v); setShowMobileSidebar(false); }}
-              onOpenSettings={() => { setShowSettings(true); setShowMobileSidebar(false); }}
-              onOpenShortcuts={() => { setShowKeyboardShortcuts(true); setShowMobileSidebar(false); }}
-              favoritesCount={favorites.size}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar - hidden on mobile */}
       <div className="hidden lg:block flex-shrink-0">
         <AppSidebar
           activeView={sidebarView}
-          onViewChange={setSidebarView}
+          onViewChange={handleViewChange}
           onOpenSettings={() => setShowSettings(true)}
           onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
           favoritesCount={favorites.size}
@@ -226,30 +247,24 @@ const Index: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Mobile top bar with menu */}
-        <div className="lg:hidden flex items-center h-12 px-3 border-b border-border/20 bg-background/80 backdrop-blur-sm flex-shrink-0">
-          <button onClick={() => setShowMobileSidebar(true)} className="p-2 rounded-lg hover:bg-muted/30 text-muted-foreground">
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2 ml-2">
-            <Tv className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold">REET TV</span>
-          </div>
-        </div>
-
+      <div
+        className="flex-1 min-w-0 flex flex-col"
+        {...swipeHandlers}
+      >
         {viewMode === 'gallery' ? (
-          <ChannelGallery
-            channels={channels}
-            favorites={favorites}
-            onSelect={handleSelectChannel}
-            onToggleFavorite={toggleFavorite}
-            onRefresh={handleRefresh}
-            isLoading={isLoading}
-            activeView={sidebarView}
-          />
+          <div className={`h-full w-full pb-16 lg:pb-0 ${transitionClass}`} key={sidebarView}>
+            <ChannelGallery
+              channels={channels}
+              favorites={favorites}
+              onSelect={handleSelectChannel}
+              onToggleFavorite={toggleFavorite}
+              onRefresh={handleRefresh}
+              isLoading={isLoading}
+              activeView={sidebarView}
+            />
+          </div>
         ) : viewMode === 'player' ? (
-          <div className="h-full w-full flex flex-col relative bg-black">
+          <div className="h-full w-full flex flex-col relative bg-black animate-fade-in">
             <Suspense fallback={<div className="h-full w-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
               <VideoPlayer
                 channel={currentChannel}
@@ -266,6 +281,16 @@ const Index: React.FC = () => {
           </div>
         ) : null}
       </div>
+
+      {/* Bottom nav - mobile only, hidden when playing */}
+      {viewMode === 'gallery' && (
+        <BottomNavBar
+          activeView={sidebarView}
+          onViewChange={handleViewChange}
+          onOpenSettings={() => setShowSettings(true)}
+          favoritesCount={favorites.size}
+        />
+      )}
 
       <Suspense fallback={null}>
         <MiniPlayer
