@@ -47,8 +47,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   const recognitionRef = useRef<any>(null);
 
   const supportsVoice = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) as boolean;
-
-  // Derive showFavoritesOnly from activeView
   const showFavoritesOnly = activeView === 'favorites';
 
   const toggleVoiceSearch = useCallback(() => {
@@ -76,7 +74,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     setIsListening(true);
   }, [isListening, supportsVoice]);
 
-  // Groups for filter tabs
   const groups = useMemo(() => {
     const groupCounts = new Map<string, number>();
     channels.forEach(c => {
@@ -90,7 +87,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     return ['all', ...sortedGroups];
   }, [channels]);
 
-  // Grouped channels for category rows
   const categoryRows = useMemo(() => {
     if (debouncedSearch || selectedGroup !== 'all' || showFavoritesOnly) return null;
     const map = new Map<string, IPTVChannel[]>();
@@ -104,7 +100,6 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       .slice(0, 8);
   }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly]);
 
-  // Filtered channels
   const filteredChannels = useMemo(() => {
     let result = channels;
     if (debouncedSearch) {
@@ -162,35 +157,39 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   const showCategoriesGrid = activeView === 'categories';
   const useVirtualized = filteredChannels.length > 100;
 
-  // Page title
   const pageTitle = activeView === 'home' ? 'Home' : activeView === 'favorites' ? 'Favorites' : activeView === 'trending' ? 'Trending' : 'Categories';
 
   return (
     <div ref={scrollContainerRef} className="h-full w-full overflow-y-auto scrollbar-thin">
       {/* Top bar with search */}
-      <div className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/20">
-        <div className="flex items-center gap-3 px-5 h-14">
-          <h2 className="text-lg font-bold text-foreground hidden sm:block min-w-fit">{pageTitle}</h2>
+      <div className="sticky top-0 z-40 backdrop-blur-xl bg-background/80 border-b border-border/10">
+        <div className="flex items-center gap-3 px-4 sm:px-5 h-14">
+          {/* Mobile: show logo + title */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Tv className="w-4 h-4 text-primary" />
+            <span className="text-sm font-black tracking-tight">REET TV</span>
+          </div>
+          <h2 className="text-lg font-bold text-foreground hidden lg:block min-w-fit">{pageTitle}</h2>
           <div className="flex-1 max-w-lg ml-auto">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search channels, categories..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-10 ${supportsVoice ? 'pr-20' : 'pr-10'} py-2 rounded-lg bg-muted/40 border ${isListening ? 'border-primary ring-1 ring-primary/30' : 'border-border/30'} text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-all`}
+                className={`w-full pl-9 ${supportsVoice ? 'pr-16' : 'pr-8'} py-2 rounded-full bg-muted/30 border ${isListening ? 'border-primary ring-2 ring-primary/20' : 'border-border/20'} text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30 transition-all`}
               />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="p-1 rounded-md hover:bg-muted/50 transition-colors">
+                  <button onClick={() => setSearchQuery('')} className="p-1 rounded-full hover:bg-muted/50 transition-colors">
                     <X className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 )}
                 {supportsVoice && (
                   <button
                     onClick={toggleVoiceSearch}
-                    className={`p-1.5 rounded-md transition-all ${isListening ? 'bg-primary/20 text-primary animate-pulse' : 'hover:bg-muted/50 text-muted-foreground'}`}
+                    className={`p-1.5 rounded-full transition-all ${isListening ? 'bg-primary/20 text-primary animate-pulse' : 'hover:bg-muted/50 text-muted-foreground'}`}
                   >
                     {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
                   </button>
@@ -198,21 +197,21 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
               </div>
             </div>
           </div>
-          <button onClick={handleRefresh} className="p-2 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors" title="Refresh">
+          <button onClick={handleRefresh} className="p-2 rounded-full hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors" title="Refresh">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
-        {/* Filter chips - show on categories / filtered views */}
+        {/* Filter chips */}
         {(activeView === 'categories' || activeView === 'trending' || debouncedSearch) && (
-          <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-2 px-4 sm:px-5 pb-3 overflow-x-auto scrollbar-hide">
             {groups.map((group) => (
               <button
                 key={group}
                 onClick={() => setSelectedGroup(group)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                   selectedGroup === group
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
               >
@@ -223,12 +222,11 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
         )}
       </div>
 
-      <main className="px-5 py-5">
+      <main className="px-4 sm:px-5 py-4 sm:py-5">
         {isLoading && channels.length === 0 ? (
           <ChannelGridSkeleton count={24} />
         ) : (
           <>
-            {/* Home view: hero + category rows */}
             {showCategoryView && (
               <>
                 {channels.length > 0 && (
@@ -256,19 +254,16 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
               </>
             )}
 
-            {/* Grid views (favorites, categories, trending, search results) */}
             {!showCategoryView && (
               <>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
+                  </p>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
-                    className="px-3 py-1.5 rounded-lg bg-muted/30 border border-border/30 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="px-3 py-1.5 rounded-full bg-muted/30 border border-border/20 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
                   >
                     <option value="name">Name</option>
                     <option value="group">Group</option>
@@ -289,7 +284,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
                     {(searchQuery || selectedGroup !== 'all') && (
                       <button
                         onClick={() => { setSearchQuery(''); setSelectedGroup('all'); }}
-                        className="mt-5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                        className="mt-5 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                       >
                         Clear Filters
                       </button>
@@ -303,7 +298,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
                     onToggleFavorite={onToggleFavorite}
                   />
                 ) : (
-                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                     {filteredChannels.map((channel, index) => (
                       <ChannelCard
                         key={channel.id}
@@ -325,7 +320,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 p-3 rounded-xl bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary hover:scale-105 active:scale-95 transition-all duration-200 animate-fade-in"
+          className="fixed bottom-20 lg:bottom-6 right-4 z-50 p-3 rounded-full bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary active:scale-90 transition-all duration-200 animate-fade-in"
         >
           <ArrowUp className="w-4 h-4" />
         </button>
