@@ -48,11 +48,11 @@ const ChannelCard: React.FC<ChannelCardProps> = memo(({
   return (
     <div
       onClick={onSelect}
-      className="group relative rounded-2xl overflow-hidden cursor-pointer bg-card border border-border/20 hover:border-primary/30 transition-all duration-300 active:scale-[0.97] hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 hover:animate-glow"
+      className="group relative rounded-3xl overflow-hidden cursor-pointer bg-card border border-border/20 hover:border-primary/30 transition-all duration-300 active:scale-[0.97] hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 hover:animate-glow"
       style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
     >
       {/* Thumbnail / Logo area */}
-      <div className="relative aspect-[4/3] sm:aspect-video bg-muted/20 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-[4/3] sm:aspect-video bg-muted/20 flex items-center justify-center overflow-hidden rounded-t-3xl">
         {showOriginal && (
           <img
             src={channel.logo}
