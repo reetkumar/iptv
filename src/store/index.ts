@@ -1,9 +1,12 @@
 // Export all store hooks
-export { useAuthStore, type User, type AuthState } from './authStore';
-export { usePlaybackStore, type PlaybackState } from './playbackStore';
-export { useUIStore, type ViewMode, type SidebarView, type Theme, type UIState } from './uiStore';
-export { useNotificationStore, type Notification, type NotificationState } from './notificationStore';
-export { useChannelStore, type ChannelStoreState } from './channelStore';
+import { useAuthStore, type User, type AuthState } from './authStore';
+import { usePlaybackStore, type PlaybackState } from './playbackStore';
+import { useUIStore, type ViewMode, type SidebarView, type Theme, type UIState } from './uiStore';
+import { useNotificationStore, type Notification, type NotificationState } from './notificationStore';
+import { useChannelStore, type ChannelStoreState } from './channelStore';
+
+export { useAuthStore, usePlaybackStore, useUIStore, useNotificationStore, useChannelStore };
+export type { User, AuthState, PlaybackState, ViewMode, SidebarView, Theme, UIState, Notification, NotificationState, ChannelStoreState };
 
 // Helper hook to get all store state
 export const useAppState = () => {
@@ -13,11 +16,5 @@ export const useAppState = () => {
   const notifications = useNotificationStore();
   const channels = useChannelStore();
 
-  return {
-    auth,
-    playback,
-    ui,
-    notifications,
-    channels,
-  };
+  return { auth, playback, ui, notifications, channels };
 };

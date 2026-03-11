@@ -117,7 +117,7 @@ export class StorageService {
     try {
       const data = JSON.parse(jsonString);
       if (data.favorites) this.saveFavorites(data.favorites);
-      if (data.watchHistory) this.saveWatchHistory(data.watchHistory);
+      if (data.watchHistory) this.addToWatchHistory(data.watchHistory[0]);
       if (data.preferences) this.saveUserPreferences(data.preferences);
       return true;
     } catch {
