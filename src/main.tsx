@@ -1,10 +1,17 @@
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
-import ErrorBoundary from "./components/ErrorBoundary.tsx";
-import "./index.css";
+import { autoRedirectLite } from "./lib/deviceDetection";
 
-createRoot(document.getElementById("root")!).render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
-);
+// Redirect low-end devices to pure HTML lite mode BEFORE loading React
+if (!autoRedirectLite()) {
+  import("react-dom/client").then(({ createRoot }) => {
+    import("./App").then(({ default: App }) => {
+      import("./components/ErrorBoundary").then(({ default: ErrorBoundary }) => {
+        import("./index.css");
+        createRoot(document.getElementById("root")!).render(
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+        );
+      });
+    });
+  });
+}

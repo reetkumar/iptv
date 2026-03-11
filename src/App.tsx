@@ -48,9 +48,9 @@ const AppContent = () => {
           <Route path="/auth/signup" element={<Navigate to="/" replace />} />
           <Route path="/auth/callback" element={<Navigate to="/" replace />} />
           <Route path="/" element={<Index />} />
+          <Route path="/tv-lite" element={<TVLitePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
