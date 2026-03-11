@@ -78,7 +78,7 @@ export const useFetchWatchHistory = (userId?: string) => {
     queryFn: async () => {
       if (!userId) return [];
       
-      const { data, error } = await supabase
+       const { data, error } = await db
         .from('watch_history')
         .select('*')
         .eq('user_id', userId)
