@@ -142,7 +142,7 @@ export const useFetchNotifications = (userId?: string) => {
     queryFn: async () => {
       if (!userId) return [];
       
-      const { data, error } = await supabase
+       const { data, error } = await db
         .from('notifications')
         .select('*')
         .eq('user_id', userId)
