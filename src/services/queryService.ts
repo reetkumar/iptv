@@ -58,7 +58,7 @@ export const useFetchFavorites = (userId?: string) => {
     queryFn: async () => {
       if (!userId) return [];
       
-      const { data, error } = await supabase
+       const { data, error } = await db
         .from('favorites')
         .select('*')
         .eq('user_id', userId);
