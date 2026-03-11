@@ -242,7 +242,7 @@ export const useUpdateUserPreferences = () => {
     mutationFn: async (preferences: Record<string, any>) => {
       if (!user) throw new Error('Not authenticated');
       
-      const { error } = await supabase
+       const { error } = await db
         .from('user_preferences')
         .update(preferences)
         .eq('user_id', user.id);
