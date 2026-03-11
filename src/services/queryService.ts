@@ -167,7 +167,7 @@ export const useAddFavorite = () => {
     mutationFn: async (channel: IPTVChannel) => {
       if (!user) throw new Error('Not authenticated');
       
-      const { error } = await supabase
+       const { error } = await db
         .from('favorites')
         .insert({
           user_id: user.id,
