@@ -3,6 +3,16 @@ command = "npm run build"
 publish = "dist"
 
 [[redirects]]
+from = "/tv-lite"
+to = "/tv-lite.html"
+status = 200
+
+[[redirects]]
+from = "/tv-lite.html"
+to = "/tv-lite.html"
+status = 200
+
+[[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
