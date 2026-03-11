@@ -100,7 +100,7 @@ export const useFetchUserProfile = (userId?: string) => {
     queryFn: async () => {
       if (!userId) return null;
       
-      const { data, error } = await supabase
+       const { data, error } = await db
         .from('profiles')
         .select('*')
         .eq('id', userId)
