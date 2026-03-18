@@ -8,10 +8,6 @@
 
 There are several ways of editing your application.
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://github.com/Reetkumarbind/reettv-premium) and start prompting.
-
 
 
 **Use your preferred IDE**
