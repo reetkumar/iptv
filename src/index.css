@@ -478,3 +478,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .progress-animate {
   transition: width 0.3s ease-out;
 }
+
+/* Hide bottom nav in landscape mode */
+@media (max-width: 768px) and (orientation: landscape) {
+  .hidden-portrait {
+    display: none !important;
+  }
+}

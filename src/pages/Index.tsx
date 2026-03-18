@@ -32,6 +32,13 @@ const Index: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('gallery');
   const [sidebarView, setSidebarView] = useState<SidebarView>('home');
   const [transitionDir, setTransitionDir] = useState<'left' | 'right' | null>(null);
+  const [isLandscape, setIsLandscape] = useState(() => window.innerWidth > window.innerHeight);
+
+  useEffect(() => {
+    const handleResize = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [preferences, setPreferences] = useState<UserPreferences>(StorageService.getUserPreferences());
   const [showSettings, setShowSettings] = useState(false);
@@ -297,7 +304,7 @@ const Index: React.FC = () => {
     keyboardService.addShortcut({ key: '?', description: 'Show Shortcuts', action: () => setShowKeyboardShortcuts(true) });
 
     return () => keyboardService.clearShortcuts();
-  }, [preferences.keyboardShortcuts, viewMode, currentIndex, channels, keyboardService, toggleFavorite]);
+  }, [preferences.keyboardShortcuts, viewMode, currentIndex, channels, filteredChannels, keyboardService, toggleFavorite]);
 
   const handleNext = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev + 1) % filteredChannels.length); }, [filteredChannels.length]);
   const handlePrevious = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev - 1 + filteredChannels.length) % filteredChannels.length); }, [filteredChannels.length]);
@@ -409,7 +416,7 @@ const Index: React.FC = () => {
         {...swipeHandlers}
       >
         {viewMode === 'gallery' ? (
-          <div className={`h-full w-full pb-14 xs:pb-16 md:pb-0 pt-12 xs:pt-0 md:pt-0 ${transitionClass}`} key={sidebarView}>
+          <div className={`h-full w-full pt-12 xs:pt-0 ${!isLandscape ? 'pb-14 xs:pb-16 md:pb-0' : 'pb-0'} ${transitionClass}`} key={sidebarView}>
             <ChannelGallery
               channels={filteredChannels}
               favorites={favorites}

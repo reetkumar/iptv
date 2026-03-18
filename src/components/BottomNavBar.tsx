@@ -23,7 +23,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
   favoritesCount,
 }) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden safe-bottom hidden-portrait">
       <div className="bg-card/95 backdrop-blur-xl border-t border-border/30">
         <div className="flex items-center justify-around px-1 h-16">
           {tabs.map(({ id, label, icon: Icon }) => {

@@ -119,7 +119,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!containerRef.current) return;
 
     const elem = containerRef.current as FullscreenElement;
-    const doc = document as DocumentExtension;
+    const doc = document as unknown as DocumentExtension;
     
     const isCurrentlyFullscreen = !!(
       doc.fullscreenElement ||
@@ -362,7 +362,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [handlePlay, handlePause]);
 
   useEffect(() => {
-    const doc = document as DocumentExtension;
+    const doc = document as unknown as DocumentExtension;
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = !!(
         doc.fullscreenElement ||
@@ -418,7 +418,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <motion.div
       ref={containerRef}
-      className="relative w-full h-full bg-black group overflow-hidden"
+      className={`relative w-full h-full bg-black group overflow-hidden ${isPortrait && isFullscreen ? 'flex items-center justify-center' : ''}`}
       onMouseMove={showControlsTemporarily}
       onTouchStart={showControlsTemporarily}
       initial={{ opacity: 0 }}
@@ -428,7 +428,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     >
       <motion.video
         ref={videoRef}
-        className="absolute inset-0 w-full h-full object-fill cursor-pointer"
+        className={`${isPortrait && isFullscreen ? 'w-auto h-auto max-w-full max-h-full object-contain' : 'absolute inset-0 w-full h-full object-fill'} cursor-pointer`}
         playsInline
         preload="auto"
         crossOrigin="anonymous"

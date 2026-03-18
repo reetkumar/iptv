@@ -40,9 +40,15 @@ function getCategoryColor(group: string): string {
 }
 
 function getLogoSearchUrl(name: string): string {
-  const cleanName = name.replace(/\s*(HD|SD|FHD|UHD|4K|\+)\s*/gi, '').trim();
-  const domain = cleanName.toLowerCase().replace(/\s+/g, '') + '.com';
-  return `https://img.logo.dev/${domain}?token=pk_anonymous&size=120&format=png`;
+  const cleanName = name.replace(/\s*(HD|SD|FHD|UHD|4K|\+|Plus)\s*/gi, '').trim();
+  const encodedName = encodeURIComponent(cleanName);
+  return `https://www.google.com/s2/favicons?domain=${encodedName}&sz=128`;
+}
+
+function getAlternativeLogoUrl(name: string): string {
+  const cleanName = name.replace(/\s*(HD|SD|FHD|UHD|4K|\+|Plus)\s*/gi, '').trim()
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `https://logo.clearbit.com/${cleanName}.com`;
 }
 
 const ChannelCard: React.FC<ChannelCardProps> = memo(({
@@ -53,10 +59,9 @@ const ChannelCard: React.FC<ChannelCardProps> = memo(({
   index,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
-  const [lookupFailed, setLookupFailed] = useState(false);
+  const [fallbackLevel, setFallbackLevel] = useState(0);
   const showOriginal = channel.logo && !imgFailed;
-  const showLookup = !showOriginal && !lookupFailed;
-  const showFallback = !showOriginal && lookupFailed;
+  const showFallback = !showOriginal;
   const hue = getGradientHue(channel.name);
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -88,7 +93,7 @@ const ChannelCard: React.FC<ChannelCardProps> = memo(({
       />
 
       {/* Thumbnail / Logo area */}
-      <div className="relative aspect-[4/3] sm:aspect-square bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-video bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center overflow-hidden">
         {/* Grid pattern */}
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '20px 20px' }} />
 
@@ -96,23 +101,23 @@ const ChannelCard: React.FC<ChannelCardProps> = memo(({
           <img
             src={channel.logo}
             alt={channel.name}
-            className="w-[85%] h-[85%] object-contain p-4 transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-lg"
+            className="w-full h-full object-cover"
             loading="lazy"
             decoding="async"
             onError={() => setImgFailed(true)}
           />
         )}
-        {showLookup && (
+        {showFallback && fallbackLevel < 2 && (
           <img
-            src={getLogoSearchUrl(channel.name)}
+            src={fallbackLevel === 0 ? getLogoSearchUrl(channel.name) : getAlternativeLogoUrl(channel.name)}
             alt={channel.name}
-            className="w-[85%] h-[85%] object-contain p-4 transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-lg"
+            className="w-full h-full object-cover"
             loading="lazy"
             decoding="async"
-            onError={() => setLookupFailed(true)}
+            onError={() => setFallbackLevel(prev => prev + 1)}
           />
         )}
-        {showFallback && (
+        {showFallback && fallbackLevel >= 2 && (
           <div
             className="absolute inset-0 flex flex-col items-center justify-center"
             style={{ background: `linear-gradient(135deg, hsl(${hue} 50% 15%) 0%, hsl(${hue + 30} 40% 10%) 100%)` }}
