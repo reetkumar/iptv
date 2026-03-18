@@ -89,7 +89,7 @@ export const enforceHTTPS = (): void => {
 // Audit logging
 export const auditLog = (
   action: string,
-  details: Record<string, any>,
+  details: Record<string, unknown>,
   severity: 'low' | 'medium' | 'high' = 'low'
 ): void => {
   const logEntry = {

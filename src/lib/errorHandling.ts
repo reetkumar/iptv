@@ -10,21 +10,32 @@ export class APIError extends Error {
   }
 }
 
-export const handleAPIError = (error: any): APIError => {
+interface ResponseError {
+  response?: {
+    status: number;
+    data?: {
+      code?: string;
+      message?: string;
+    };
+  };
+}
+
+export const handleAPIError = (error: unknown): APIError => {
   if (error instanceof APIError) {
     return error;
   }
 
-  if (error.response) {
-    const status = error.response.status;
-    const code = error.response.data?.code || 'UNKNOWN_ERROR';
-    const message = error.response.data?.message || getErrorMessage(status);
+  const responseError = error as ResponseError;
+  if (responseError.response) {
+    const status = responseError.response.status;
+    const code = responseError.response.data?.code || 'UNKNOWN_ERROR';
+    const message = responseError.response.data?.message || getErrorMessage(status);
 
     return new APIError(status, code, message);
   }
 
-  if (error.message) {
-    return new APIError(500, 'NETWORK_ERROR', error.message);
+  if (error && typeof error === 'object' && 'message' in error) {
+    return new APIError(500, 'NETWORK_ERROR', String((error as { message: unknown }).message));
   }
 
   return new APIError(500, 'UNKNOWN_ERROR', 'An unexpected error occurred');
@@ -52,7 +63,7 @@ export const retryWithBackoff = async <T,>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> => {
-  let lastError: any;
+  let lastError: unknown;
 
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -73,7 +84,7 @@ export const retryWithBackoff = async <T,>(
     }
   }
 
-  throw lastError;
+  throw lastError as Error;
 };
 
 // Graceful degradation for offline support

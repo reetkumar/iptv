@@ -65,9 +65,9 @@ const MobileHome: React.FC<MobileHomeProps> = memo(({
           <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedSection === 'trending' ? 'rotate-90' : ''}`} />
         </div>
 
-        {/* Cards Grid */}
-        <div className={`grid gap-4 transition-all duration-300 overflow-hidden ${expandedSection === 'trending' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-          {(expandedSection === 'trending' ? trendingChannels : trendingChannels.slice(0, 2)).map((channel, index) => (
+        {/* Cards Grid - 2x3 on mobile (2 cols, 3 rows = 6) */}
+        <div className={`grid gap-3 transition-all duration-300 overflow-hidden ${expandedSection === 'trending' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+          {(expandedSection === 'trending' ? trendingChannels.slice(0, 6) : trendingChannels.slice(0, 4)).map((channel, index) => (
             <MobileChannelCard
               key={channel.id}
               channel={channel}
@@ -104,8 +104,8 @@ const MobileHome: React.FC<MobileHomeProps> = memo(({
             <p className="text-sm text-muted-foreground">No favorites yet. Add some channels!</p>
           </div>
         ) : (
-          <div className={`grid gap-4 transition-all duration-300 overflow-hidden ${expandedSection === 'favorites' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-            {(expandedSection === 'favorites' ? favoriteChannels : favoriteChannels.slice(0, 2)).map((channel, index) => (
+          <div className={`grid gap-3 transition-all duration-300 overflow-hidden ${expandedSection === 'favorites' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+            {(expandedSection === 'favorites' ? favoriteChannels.slice(0, 6) : favoriteChannels.slice(0, 4)).map((channel, index) => (
               <MobileChannelCard
                 key={channel.id}
                 channel={channel}
@@ -138,9 +138,9 @@ const MobileHome: React.FC<MobileHomeProps> = memo(({
           <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedSection === 'browse' ? 'rotate-90' : ''}`} />
         </div>
 
-        {/* Cards Grid */}
-        <div className={`grid gap-4 transition-all duration-300 overflow-hidden ${expandedSection === 'browse' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
-          {(expandedSection === 'browse' ? browseChannels : browseChannels.slice(0, 2)).map((channel, index) => (
+        {/* Cards Grid - 2x3 on mobile */}
+        <div className={`grid gap-3 transition-all duration-300 overflow-hidden ${expandedSection === 'browse' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+          {(expandedSection === 'browse' ? browseChannels.slice(0, 6) : browseChannels.slice(0, 4)).map((channel, index) => (
             <MobileChannelCard
               key={channel.id}
               channel={channel}

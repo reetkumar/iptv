@@ -165,10 +165,11 @@ export const designTokens = {
 };
 
 // Utility function to access tokens
-export const getToken = (path: string, defaultValue?: any): any => {
-  return path.split('.').reduce((current, segment) => {
-    return current?.[segment] ?? defaultValue;
-  }, designTokens);
+export const getToken = <T>(path: string, defaultValue?: T): T | undefined => {
+  const value = path.split('.').reduce<Record<string, unknown> | undefined>((current, segment) => {
+    return current?.[segment] as Record<string, unknown> | undefined;
+  }, designTokens as Record<string, unknown>);
+  return (value as T) ?? defaultValue;
 };
 
 // CSS variables generator

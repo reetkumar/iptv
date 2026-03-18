@@ -8,10 +8,44 @@ import CategoryRow from './CategoryRow';
 import VirtualizedChannelGrid from './VirtualizedChannelGrid';
 import { useDebounce } from '../hooks/useDebounce';
 
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognition extends EventTarget {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
 declare global {
   interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
   }
 }
 
@@ -23,6 +57,15 @@ interface ChannelGalleryProps {
   onRefresh: () => void;
   isLoading?: boolean;
   activeView?: 'home' | 'favorites' | 'categories' | 'trending';
+  channelCounts?: {
+    News: IPTVChannel[];
+    Music: IPTVChannel[];
+    Movies: IPTVChannel[];
+    Entertainment: IPTVChannel[];
+    Religious: IPTVChannel[];
+    Sports: IPTVChannel[];
+    Regional: IPTVChannel[];
+  };
 }
 
 type SortOption = 'name' | 'group' | 'recent';
@@ -35,6 +78,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   onRefresh,
   isLoading = false,
   activeView = 'home',
+  channelCounts,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -44,7 +88,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const supportsVoice = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) as boolean;
   const showFavoritesOnly = activeView === 'favorites';
@@ -56,14 +100,14 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       return;
     }
     if (!supportsVoice) return;
-    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'en-IN';
     recognition.interimResults = true;
     recognition.continuous = false;
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results as SpeechRecognitionResultList)
-        .map((r: any) => r[0].transcript)
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = Array.from(event.results)
+        .map((r) => r[0].transcript)
         .join('');
       setSearchQuery(transcript);
     };
@@ -75,6 +119,19 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   }, [isListening, supportsVoice]);
 
   const groups = useMemo(() => {
+    // Use channelCounts if available for proper categorization
+    if (channelCounts) {
+      const groupList: string[] = [];
+      if (channelCounts.News.length > 0) groupList.push('News');
+      if (channelCounts.Music.length > 0) groupList.push('Music');
+      if (channelCounts.Movies.length > 0) groupList.push('Movies');
+      if (channelCounts.Entertainment.length > 0) groupList.push('Entertainment');
+      if (channelCounts.Religious.length > 0) groupList.push('Religious');
+      if (channelCounts.Sports.length > 0) groupList.push('Sports');
+      if (channelCounts.Regional.length > 0) groupList.push('Regional');
+      return ['all', ...groupList];
+    }
+    // Fallback: derive from channels
     const groupCounts = new Map<string, number>();
     channels.forEach(c => {
       const group = c.group || 'General';
@@ -85,10 +142,26 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       .slice(0, 10)
       .map(([group]) => group);
     return ['all', ...sortedGroups];
-  }, [channels]);
+  }, [channels, channelCounts]);
 
   const categoryRows = useMemo(() => {
     if (debouncedSearch || selectedGroup !== 'all' || showFavoritesOnly) return null;
+    
+    // Use channelCounts if provided (pre-filtered Hindi/English)
+    if (channelCounts) {
+      const rows: [string, IPTVChannel[]][] = [
+        ['News', channelCounts.News],
+        ['Music', channelCounts.Music],
+        ['Movies', channelCounts.Movies],
+        ['Entertainment', channelCounts.Entertainment],
+        ['Religious', channelCounts.Religious],
+        ['Sports', channelCounts.Sports],
+        ['Regional', channelCounts.Regional],
+      ].filter((row): row is [string, IPTVChannel[]] => row[1].length > 0);
+      return rows.sort((a, b) => b[1].length - a[1].length);
+    }
+    
+    // Fallback to dynamic grouping
     const map = new Map<string, IPTVChannel[]>();
     channels.forEach(ch => {
       const group = ch.group || 'General';
@@ -98,9 +171,33 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
     return Array.from(map.entries())
       .sort((a, b) => b[1].length - a[1].length)
       .slice(0, 8);
-  }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly]);
+  }, [channels, channelCounts, debouncedSearch, selectedGroup, showFavoritesOnly]);
 
   const filteredChannels = useMemo(() => {
+    // Use channelCounts for filtering when available
+    if (channelCounts && selectedGroup !== 'all') {
+      let result: IPTVChannel[] = [];
+      switch (selectedGroup) {
+        case 'News': result = channelCounts.News; break;
+        case 'Music': result = channelCounts.Music; break;
+        case 'Movies': result = channelCounts.Movies; break;
+        case 'Entertainment': result = channelCounts.Entertainment; break;
+        case 'Religious': result = channelCounts.Religious; break;
+        case 'Sports': result = channelCounts.Sports; break;
+        case 'Regional': result = channelCounts.Regional; break;
+        default: result = channels;
+      }
+      if (debouncedSearch) {
+        const query = debouncedSearch.toLowerCase();
+        result = result.filter(c =>
+          c.name.toLowerCase().includes(query) ||
+          c.group?.toLowerCase().includes(query)
+        );
+      }
+      return result;
+    }
+    
+    // Default filtering
     let result = channels;
     if (debouncedSearch) {
       const query = debouncedSearch.toLowerCase();
@@ -111,7 +208,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       );
     }
     if (selectedGroup !== 'all') {
-      result = result.filter(c => c.group === selectedGroup);
+      result = result.filter(c => (c.group || '').toLowerCase() === selectedGroup.toLowerCase());
     }
     if (showFavoritesOnly) {
       result = result.filter(c => favorites.has(c.id));
@@ -124,7 +221,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       }
     });
     return result;
-  }, [channels, debouncedSearch, selectedGroup, showFavoritesOnly, sortBy, favorites]);
+  }, [channels, channelCounts, debouncedSearch, selectedGroup, showFavoritesOnly, sortBy, favorites]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -145,15 +242,15 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   }, [onRefresh]);
 
   const handleChannelSelect = useCallback((channel: IPTVChannel) => {
-    const index = channels.findIndex(c => c.id === channel.id);
+    const index = filteredChannels.findIndex(c => c.id === channel.id);
     if (index !== -1) onSelect(index);
-  }, [channels, onSelect]);
+  }, [filteredChannels, onSelect]);
 
   const scrollToTop = useCallback(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const showCategoryView = activeView === 'home' && categoryRows && !debouncedSearch && selectedGroup === 'all';
+  const showCategoryView = activeView === 'home' && categoryRows && !debouncedSearch && selectedGroup === 'all' && !showFavoritesOnly;
   const showCategoriesGrid = activeView === 'categories';
   const useVirtualized = filteredChannels.length > 100;
 
@@ -197,16 +294,17 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
               </div>
             </div>
           </div>
-          <button onClick={handleRefresh} className="p-2 rounded-full hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors" title="Refresh">
+          <button type="button" onClick={handleRefresh} className="p-2 rounded-full hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors" title="Refresh">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
-        {/* Filter chips */}
-        {(activeView === 'categories' || activeView === 'trending' || debouncedSearch) && (
+        {/* Filter chips - show for trending, categories, or when there's a filter/search */}
+        {(activeView === 'categories' || activeView === 'trending' || debouncedSearch || selectedGroup !== 'all') && (
           <div className="flex items-center gap-2 px-4 sm:px-5 pb-3 overflow-x-auto scrollbar-hide">
             {groups.map((group) => (
               <button
+                type="button"
                 key={group}
                 onClick={() => setSelectedGroup(group)}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${

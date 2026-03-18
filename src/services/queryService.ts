@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useChannelStore } from '@/store/channelStore';
 import { useAuthStore } from '@/store/authStore';
 
-// Cast supabase to any to work around missing table type definitions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 const QUERY_KEYS = {
@@ -239,7 +239,7 @@ export const useUpdateUserPreferences = () => {
   const { user } = useAuthStore();
 
   return useMutation({
-    mutationFn: async (preferences: Record<string, any>) => {
+    mutationFn: async (preferences: Record<string, unknown>) => {
       if (!user) throw new Error('Not authenticated');
       
        const { error } = await db

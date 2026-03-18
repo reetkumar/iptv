@@ -1,17 +1,29 @@
+import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { registerServiceWorker } from "@/services/serviceWorkerService";
-import { NotificationCenter } from "@/components/NotificationCenter";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TVLitePage = lazy(() => import("./pages/TVLitePage"));
-
-// Lazy load UI providers to defer non-critical imports
 const UIProviders = lazy(() => import("./components/UIProviders"));
+
+// Defer notification center - load after initial render
+const NotificationCenter = () => {
+  const [NotificationCenterComp, setNotificationCenter] = useState<React.ComponentType<unknown> | null>(null);
+  
+  useEffect(() => {
+    import("@/components/NotificationCenter").then((mod) => {
+      setNotificationCenter(() => mod.NotificationCenter);
+    });
+  }, []);
+
+  if (!NotificationCenterComp) return null;
+  return <NotificationCenterComp />;
+};
 
 // Configure QueryClient for optimal performance
 const queryClient = new QueryClient({
@@ -35,14 +47,13 @@ const LoadingFallback = () => (
 // Main app content
 const AppContent = () => {
   useEffect(() => {
-    // Register service worker for PWA support
     registerServiceWorker();
   }, []);
 
   return (
     <>
       <NotificationCenter />
-      <Suspense fallback={<LoadingFallback />}>
+      <Suspense fallback={null}>
         <Routes>
           <Route path="/auth/login" element={<Navigate to="/" replace />} />
           <Route path="/auth/signup" element={<Navigate to="/" replace />} />
@@ -60,7 +71,7 @@ const AppContent = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={null}>
       <UIProviders>
         <BrowserRouter
           future={{

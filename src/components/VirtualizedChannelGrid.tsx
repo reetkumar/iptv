@@ -28,8 +28,8 @@ function getColumnCount(width: number): number {
   if (width >= 640) return 3;
   // Mobile portrait: 2 columns
   if (width >= 480) return 2;
-  // Small phones: 1 column
-  return 1;
+  // Small phones: 2 columns (match home page grid)
+  return 2;
 }
 
 function getCardHeight(width: number): number {

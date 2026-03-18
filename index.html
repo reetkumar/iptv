@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="REET TV - Premium IPTV streaming service offering live TV channels, on-demand content, and personalized recommendations. Watch your favorite shows and movies anytime, anywhere." />
     <meta name="keywords" content="IPTV, live TV, streaming, channels, on-demand, premium content, television" />
     <meta name="author" content="REET Kumar Bind" />
@@ -16,12 +16,21 @@
     <link rel="apple-touch-icon" href="/favicon.svg">
     
     <!-- Preload critical resources for faster load -->
-    <link rel="preload" as="script" href="/src/main.tsx">
-    <link rel="prefetch" href="/src/pages/Index.tsx">
+    <link rel="modulepreload" href="/src/main.tsx">
+    <link rel="modulepreload" href="/src/App.tsx">
+    <link rel="modulepreload" href="/src/pages/Index.tsx">
+    <link rel="modulepreload" href="/src/components/ChannelGallery.tsx">
+    <link rel="modulepreload" href="/src/components/ChannelCard.tsx">
+    <link rel="modulepreload" href="/src/components/VideoPlayer.tsx">
     
     <!-- DNS prefetch and preconnect for external resources -->
     <link rel="dns-prefetch" href="//supabase.co">
+    <link rel="dns-prefetch" href="//iptv-org.github.io">
     <link rel="preconnect" href="//supabase.co" crossorigin>
+    <link rel="preconnect" href="//iptv-org.github.io" crossorigin>
+    
+    <!-- Preload M3U playlist for faster initial load -->
+    <link rel="prefetch" href="https://iptv-org.github.io/iptv/countries/in.m3u" as="fetch" crossorigin>
     
     <!-- Canonical URL -->
     <link rel="canonical" href="https://reettv.com" />

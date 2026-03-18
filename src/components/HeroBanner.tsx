@@ -1,6 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IPTVChannel } from '../types';
+import { MotionDiv } from './motion';
+
+const HERO_CHANNELS = [
+  'Aaj Tak',
+  '9XM', 
+  'Zoom',
+  'Zee News',
+  'Amar Ujala',
+  'India TV',
+  'DD National',
+  'Bhojpuri Movie',
+  'B4U Bholpuri',
+  '9X Jalwa',
+];
 
 interface HeroBannerProps {
   channels: IPTVChannel[];
@@ -9,7 +23,21 @@ interface HeroBannerProps {
 
 const HeroBanner: React.FC<HeroBannerProps> = ({ channels, onSelect }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const featured = channels.slice(0, 5);
+  
+  const featured = useMemo(() => {
+    const matched: IPTVChannel[] = [];
+    for (const name of HERO_CHANNELS) {
+      const found = channels.find(ch => 
+        ch.name.toLowerCase().includes(name.toLowerCase()) ||
+        name.toLowerCase().includes(ch.name.toLowerCase().split(' ')[0])
+      );
+      if (found && !matched.find(m => m.id === found.id)) {
+        matched.push(found);
+      }
+      if (matched.length >= 10) break;
+    }
+    return matched.length > 0 ? matched : channels.slice(0, 5);
+  }, [channels]);
 
   const next = useCallback(() => {
     setActiveIndex(prev => (prev + 1) % featured.length);
@@ -29,7 +57,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ channels, onSelect }) => {
   const current = featured[activeIndex];
 
   return (
-    <div className="relative w-full h-48 sm:h-56 lg:h-64 mb-6 rounded-3xl overflow-hidden group bg-card border border-border/10">
+    <MotionDiv direction="up" className="relative w-full h-48 sm:h-56 lg:h-64 mb-6 rounded-3xl overflow-hidden group bg-card border border-border/10" delay={0.05}>
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-card/80 to-secondary/10" />
       <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
@@ -95,7 +123,7 @@ const HeroBanner: React.FC<HeroBannerProps> = ({ channels, onSelect }) => {
           ))}
         </div>
       )}
-    </div>
+    </MotionDiv>
   );
 };
 

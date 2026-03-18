@@ -42,6 +42,41 @@ const Index: React.FC = () => {
   const healthCheckRunning = useRef(false);
   const healthCheckAbortRef = useRef<AbortController | null>(null);
 
+  // Filter to only Hindi and English channels
+  const filteredChannels = useMemo(() => {
+    const hindiEnglish = channels.filter(ch => {
+      const lang = (ch.language || '').toLowerCase();
+      return lang === 'hindi' || lang === 'english' || lang === 'hin' || lang === 'eng' || lang === 'hi' || lang === 'en';
+    });
+    return hindiEnglish.length > 0 ? hindiEnglish : channels;
+  }, [channels]);
+
+  // Group channels by category for categories view
+  const channelsByCategory = useMemo(() => {
+    const categories = {
+      News: [] as IPTVChannel[],
+      Music: [] as IPTVChannel[],
+      Movies: [] as IPTVChannel[],
+      Entertainment: [] as IPTVChannel[],
+      Religious: [] as IPTVChannel[],
+      Sports: [] as IPTVChannel[],
+      Regional: [] as IPTVChannel[],
+    };
+    
+    filteredChannels.forEach(ch => {
+      const group = (ch.group || '').toLowerCase();
+      if (group.includes('news')) categories.News.push(ch);
+      else if (group.includes('music')) categories.Music.push(ch);
+      else if (group.includes('movie') || group.includes('cinema')) categories.Movies.push(ch);
+      else if (group.includes('religious') || group.includes('spirit') || group.includes('devotional')) categories.Religious.push(ch);
+      else if (group.includes('sports')) categories.Sports.push(ch);
+      else if (group.includes('entertainment') || group.includes('tv') || group.includes('serial')) categories.Entertainment.push(ch);
+      else categories.Regional.push(ch);
+    });
+    
+    return categories;
+  }, [filteredChannels]);
+
   // Swipe to navigate between views
   const navigateView = useCallback((direction: 'left' | 'right') => {
     if (viewMode !== 'gallery') return;
@@ -89,53 +124,81 @@ const Index: React.FC = () => {
   });
 
   useEffect(() => {
+    let isCancelled = false;
+    
     const initApp = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
+        // Load favorites first - fast localStorage read
         const savedFavorites = StorageService.getFavorites();
         setFavorites(new Set(savedFavorites));
 
+        // Show cached channels IMMEDIATELY for instant display
         const cached = ChannelHealthService.getCachedChannels();
-        if (cached && cached.length > 0) {
+        if (cached && cached.length > 0 && !isCancelled) {
           const healthy = ChannelHealthService.filterHealthyChannels(cached);
           setChannels(healthy);
-          setIsLoading(false);
+          // Don't set loading false yet - we're fetching fresh data
         }
 
-        const data = await fetchAndParseM3U(M3U_URL);
-        const validChannels = data.filter(channel => channel.url && channel.name && channel.id);
+        // Start fetching fresh data in background (non-blocking)
+        const fetchPromise = fetchAndParseM3U(M3U_URL)
+          .then(data => {
+            if (isCancelled) return null;
+            const validChannels = data.filter(channel => channel.url && channel.name && channel.id);
+            ChannelHealthService.cacheChannels(validChannels);
+            return validChannels;
+          })
+          .catch(err => {
+            if (isCancelled) return null;
+            console.error('Fetch error:', err);
+            return null;
+          });
 
-        ChannelHealthService.cacheChannels(validChannels);
-
-        const healthFiltered = ChannelHealthService.filterHealthyChannels(validChannels);
-        setChannels(healthFiltered);
-        setIsLoading(false);
-
-        if (!healthCheckRunning.current) {
+        // Start background health check IMMEDIATELY (doesn't block UI)
+        const healthCheckPromise = (async () => {
+          if (healthCheckRunning.current) return;
           healthCheckRunning.current = true;
-          // Cancel any previous health check
+          
           if (healthCheckAbortRef.current) {
             healthCheckAbortRef.current.abort();
           }
           healthCheckAbortRef.current = new AbortController();
           const abortSignal = healthCheckAbortRef.current.signal;
-          
-          ChannelHealthService.checkChannelsBatch(
-            validChannels,
-            (newHealthyIds) => {
-              if (!abortSignal.aborted) {
-                setHealthyIds(new Set(newHealthyIds));
-              }
-            },
-            8
-          ).finally(() => { 
+
+          try {
+            const cachedChannels = await ChannelHealthService.getCachedChannels() || [];
+            await ChannelHealthService.checkChannelsBatch(
+              cachedChannels,
+              (newHealthyIds) => {
+                if (!abortSignal.aborted && !isCancelled) {
+                  setHealthyIds(newHealthyIds);
+                }
+              },
+              15 // Faster batch processing
+            );
+          } finally {
             if (!abortSignal.aborted) {
               healthCheckRunning.current = false;
             }
-          });
+          }
+        })();
+
+        // Wait for fetch to complete
+        const validChannels = await fetchPromise;
+        
+        if (isCancelled) return;
+
+        if (validChannels && validChannels.length > 0) {
+          const healthFiltered = ChannelHealthService.filterHealthyChannels(validChannels);
+          setChannels(healthFiltered);
         }
+
+        setIsLoading(false);
+
+        // Health check continues in background
       } catch (err) {
         console.error('Error loading channels:', err);
         if (channels.length === 0) {
@@ -144,7 +207,13 @@ const Index: React.FC = () => {
         setIsLoading(false);
       }
     };
+
     initApp();
+
+    return () => {
+      isCancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
 
   useEffect(() => {
@@ -215,11 +284,11 @@ const Index: React.FC = () => {
       if (viewMode === 'player' && channels.length > 0) setCurrentIndex((prev) => (prev - 1 + channels.length) % channels.length);
     }});
     keyboardService.addShortcut({ key: 'ArrowRight', description: 'Next Channel', action: () => {
-      if (viewMode === 'player' && channels.length > 0) setCurrentIndex((prev) => (prev + 1) % channels.length);
+      if (viewMode === 'player' && filteredChannels.length > 0) setCurrentIndex((prev) => (prev + 1) % filteredChannels.length);
     }});
     keyboardService.addShortcut({ key: 'Escape', description: 'Back to Gallery', action: () => setViewMode('gallery') });
     keyboardService.addShortcut({ key: 'h', description: 'Toggle Favorite', action: () => {
-      if (currentIndex >= 0 && channels[currentIndex]) toggleFavorite(channels[currentIndex].id);
+      if (currentIndex >= 0 && filteredChannels[currentIndex]) toggleFavorite(filteredChannels[currentIndex].id);
     }});
     keyboardService.addShortcut({ key: 'm', description: 'Toggle Mute', action: () => {
       const video = document.querySelector('video'); if (video) video.muted = !video.muted;
@@ -230,13 +299,16 @@ const Index: React.FC = () => {
     return () => keyboardService.clearShortcuts();
   }, [preferences.keyboardShortcuts, viewMode, currentIndex, channels, keyboardService, toggleFavorite]);
 
-  const handleNext = useCallback(() => { if (channels.length === 0) return; setCurrentIndex((prev) => (prev + 1) % channels.length); }, [channels.length]);
-  const handlePrevious = useCallback(() => { if (channels.length === 0) return; setCurrentIndex((prev) => (prev - 1 + channels.length) % channels.length); }, [channels.length]);
+  const handleNext = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev + 1) % filteredChannels.length); }, [filteredChannels.length]);
+  const handlePrevious = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev - 1 + filteredChannels.length) % filteredChannels.length); }, [filteredChannels.length]);
 
   const handleSelectChannel = useCallback((index: number) => { 
-    setCurrentIndex(index); 
-    setViewMode('player'); 
-  }, []);
+    // Ensure index is valid for current filtered channels
+    if (index >= 0 && index < filteredChannels.length) {
+      setCurrentIndex(index);
+      setViewMode('player');
+    }
+  }, [filteredChannels.length]);
   
   const handleMinimizePlayer = useCallback(() => setViewMode('mini'), []);
   const handleMaximizePlayer = useCallback(() => setViewMode('player'), []);
@@ -244,31 +316,33 @@ const Index: React.FC = () => {
   const handleExitPlayer = useCallback(() => setViewMode('gallery'), []);
   const handleShowKeyboard = useCallback(() => setShowKeyboardShortcuts(true), []);
 
-  // Use useRef to track current channel without triggering re-renders on every channels array change
-  const currentChannelRef = useRef<IPTVChannel | null>(null);
-  const prevChannelIdRef = useRef<string | null>(null);
+  // Use state to track current channel - ensures proper re-render when channel changes
+  const [currentChannel, setCurrentChannel] = useState<IPTVChannel | null>(null);
   
+  // Reset current channel when view changes
   useEffect(() => {
-    if (currentIndex >= 0 && currentIndex < channels.length) {
-      const newChannel = channels[currentIndex];
-      if (prevChannelIdRef.current !== newChannel.id) {
-        currentChannelRef.current = newChannel;
-        prevChannelIdRef.current = newChannel.id;
-      }
-    }
-  }, [currentIndex, channels]);
+    setCurrentChannel(null);
+    setCurrentIndex(-1);
+  }, [sidebarView]);
 
-  const currentChannel = currentChannelRef.current;
+  useEffect(() => {
+    if (currentIndex >= 0 && currentIndex < filteredChannels.length) {
+      setCurrentChannel(filteredChannels[currentIndex]);
+    } else {
+      setCurrentChannel(null);
+    }
+  }, [currentIndex, filteredChannels]);
   const nextChannelName = useMemo(() => {
-    if (channels.length === 0 || currentIndex < 0) return null;
-    return channels[(currentIndex + 1) % channels.length].name;
-  }, [channels, currentIndex]);
+    if (filteredChannels.length === 0 || currentIndex < 0) return null;
+    return filteredChannels[(currentIndex + 1) % filteredChannels.length].name;
+  }, [filteredChannels, currentIndex]);
 
   // Memoize callbacks for VideoPlayer to prevent re-renders
   const handleToggleFavorite = useCallback(() => {
     if (currentChannel) {
       toggleFavorite(currentChannel.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentChannel?.id, toggleFavorite]);
 
   // Transition class for page content
@@ -278,7 +352,8 @@ const Index: React.FC = () => {
     ? 'animate-slide-in-right'
     : '';
 
-  if (isLoading) {
+  // Show instant UI - only show full spinner when NO data at all
+  if (channels.length === 0 && isLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-background relative overflow-hidden p-4 md:p-0">
         <div className="absolute top-1/4 left-1/4 w-48 md:w-64 h-48 md:h-64 bg-primary/5 blur-[100px] rounded-full" />
@@ -336,13 +411,14 @@ const Index: React.FC = () => {
         {viewMode === 'gallery' ? (
           <div className={`h-full w-full pb-14 xs:pb-16 md:pb-0 pt-12 xs:pt-0 md:pt-0 ${transitionClass}`} key={sidebarView}>
             <ChannelGallery
-              channels={channels}
+              channels={filteredChannels}
               favorites={favorites}
               onSelect={handleSelectChannel}
               onToggleFavorite={toggleFavorite}
               onRefresh={handleRefresh}
               isLoading={isLoading}
               activeView={sidebarView}
+              channelCounts={channelsByCategory}
             />
           </div>
         ) : viewMode === 'player' ? (

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { IPTVChannel } from '../types';
 import ChannelCard from './ChannelCard';
+import { MotionDiv } from './motion';
 
 interface CategoryRowProps {
   title: string;
@@ -32,7 +33,7 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
   if (channels.length === 0) return null;
 
   return (
-    <div className="mb-7 group/row">
+    <MotionDiv direction="up" className="mb-7 group/row" delay={0.1}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-base font-bold text-foreground">{title}</h3>
         <span className="text-[11px] text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full">{channels.length}</span>
@@ -64,7 +65,7 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
           <ChevronRight className="w-4 h-4 text-foreground" />
         </button>
       </div>
-    </div>
+    </MotionDiv>
   );
 };
 

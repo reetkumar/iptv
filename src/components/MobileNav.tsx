@@ -26,7 +26,7 @@ const MobileNav: React.FC<MobileNavProps> = memo(({
         {navItems.map(({ id, label, icon: Icon, badge }) => (
           <button
             key={id}
-            onClick={() => onViewChange(id as any)}
+            onClick={() => onViewChange(id as 'home' | 'trending' | 'favorites' | 'browse' | 'settings')}
             className={`flex flex-col items-center justify-center gap-1 px-4 py-2 transition-all relative ${
               activeView === id
                 ? 'text-primary'

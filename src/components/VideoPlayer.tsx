@@ -1,24 +1,28 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
-  Minimize,
-  SkipBack,
-  SkipForward,
-  Heart,
-  ArrowLeft,
-  Loader2,
-  AlertCircle,
-  RefreshCw,
-  Tv,
-  Keyboard,
-  Settings,
-} from 'lucide-react';
 import { IPTVChannel } from '../types';
+import { VideoControls } from './VideoControls';
+import { VideoErrorOverlay } from './VideoErrorOverlay';
+import { VideoLoadingOverlay } from './VideoLoadingOverlay';
+import { motion, AnimatePresence } from './motion';
+
+interface FullscreenElement {
+  requestFullscreen?: () => Promise<void>;
+  webkitRequestFullscreen?: () => Promise<void>;
+  mozRequestFullScreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+}
+
+interface DocumentExtension {
+  fullscreenElement: FullscreenElement | null;
+  webkitFullscreenElement: FullscreenElement | null;
+  mozFullScreenElement: FullscreenElement | null;
+  msFullscreenElement: FullscreenElement | null;
+  exitFullscreen?: () => Promise<void>;
+  webkitExitFullscreen?: () => Promise<void>;
+  mozCancelFullScreen?: () => Promise<void>;
+  msExitFullscreen?: () => Promise<void>;
+}
 
 interface VideoPlayerProps {
   channel: IPTVChannel | null;
@@ -39,7 +43,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onToggleFavorite,
   onNext,
   onPrevious,
-  onMinimize,
   onExit,
   onShowKeyboard,
 }) => {
@@ -55,13 +58,105 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [isPortrait, setIsPortrait] = useState(() => window.innerHeight > window.innerWidth);
 
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    const handleOrientationChange = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleOrientationChange);
+    screen.orientation?.addEventListener('change', handleOrientationChange);
+    return () => {
+      window.removeEventListener('resize', handleOrientationChange);
+      screen.orientation?.removeEventListener('change', handleOrientationChange);
+    };
+  }, []);
 
-  // Load HLS stream - only reload when channel URL changes
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePlay = useCallback(() => setIsPlaying(true), []);
+  const handlePause = useCallback(() => setIsPlaying(false), []);
+  const showControlsTemporarily = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      if (isPlaying) setShowControls(false);
+    }, 3000);
+  }, [isPlaying]);
+
+  const togglePlay = useCallback(() => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play().catch((error) => {
+        if (error.name !== 'AbortError') {
+          console.error('Play error:', error);
+        }
+      });
+    }
+  }, [isPlaying]);
+
+  const toggleMute = useCallback(() => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  }, [isMuted]);
+
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    setVolume(newVolume);
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      setIsMuted(newVolume === 0);
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const elem = containerRef.current as FullscreenElement;
+    const doc = document as DocumentExtension;
+    
+    const isCurrentlyFullscreen = !!(
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement
+    );
+
+    if (!isCurrentlyFullscreen) {
+      const requestFullscreen = 
+        elem.requestFullscreen ||
+        elem.webkitRequestFullscreen ||
+        elem.mozRequestFullScreen ||
+        elem.msRequestFullscreen;
+
+      if (requestFullscreen) {
+        requestFullscreen.call(elem).catch((err: Error) => {
+          console.error('Fullscreen request failed:', err);
+        });
+        setIsFullscreen(true);
+      }
+    } else {
+      const exitFullscreen = 
+        doc.exitFullscreen ||
+        doc.webkitExitFullscreen ||
+        doc.mozCancelFullScreen ||
+        doc.msExitFullscreen;
+
+      if (exitFullscreen) {
+        exitFullscreen.call(doc).catch((err: Error) => {
+          console.error('Exit fullscreen failed:', err);
+        });
+        setIsFullscreen(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!channel || !videoRef.current) return;
 
@@ -70,7 +165,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsLoading(true);
     setShowLoadingOverlay(true);
     setError(null);
-    setRetryCount(0); // Reset retry count when switching channels
 
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
@@ -82,13 +176,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       overlayTimeoutRef.current = null;
     }
 
-    // Cleanup previous instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
-    // Pause video before loading new stream
     video.pause();
 
     let isComponentMounted = true;
@@ -105,24 +197,27 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           startLevel: -1,
           autoStartLoad: true,
           capLevelToPlayerSize: true,
-          maxLoadingDelay: 4,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          backBufferLength: 15,
-          maxBufferSize: 30 * 1000 * 1000,
+          maxLoadingDelay: 2,
+          maxBufferLength: 20,
+          maxMaxBufferLength: 40,
+          backBufferLength: 10,
+          maxBufferSize: 20 * 1000 * 1000,
           maxBufferHole: 0.5,
-          manifestLoadingTimeOut: 8000,
-          manifestLoadingMaxRetry: 3,
-          manifestLoadingRetryDelay: 500,
-          levelLoadingTimeOut: 8000,
-          levelLoadingMaxRetry: 3,
-          fragLoadingTimeOut: 15000,
-          fragLoadingMaxRetry: 4,
-          fragLoadingRetryDelay: 500,
-          abrEwmaDefaultEstimate: 500000,
-          abrBandWidthFactor: 0.95,
-          abrBandWidthUpFactor: 0.7,
+          manifestLoadingTimeOut: 5000,
+          manifestLoadingMaxRetry: 2,
+          manifestLoadingRetryDelay: 300,
+          levelLoadingTimeOut: 5000,
+          levelLoadingMaxRetry: 2,
+          fragLoadingTimeOut: 10000,
+          fragLoadingMaxRetry: 3,
+          fragLoadingRetryDelay: 300,
+          abrEwmaDefaultEstimate: 400000,
+          abrBandWidthFactor: 0.9,
+          abrBandWidthUpFactor: 0.65,
           progressive: true,
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 5,
+          liveDurationInfinity: true,
         });
 
         hlsRef.current = hls;
@@ -136,7 +231,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             loadTimeoutRef.current = null;
           }
           setIsLoading(false);
-          setRetryCount(0);
           hls.currentLevel = -1;
           if (video.paused) {
             video.play().catch((error) => {
@@ -153,7 +247,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           if (data.fatal) {
             if (retries < maxRetries) {
               retries++;
-              setRetryCount(retries);
               if (hlsRef.current === hls) {
                 hls.destroy();
                 hlsRef.current = null;
@@ -231,15 +324,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [channel]);
 
-  // Video event handlers
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
     const handleWaiting = () => {
-      // Only show loading if we're really stuck buffering for more than 1s
       setTimeout(() => {
         if (video.paused === false && video.readyState < 3) {
           setShowLoadingOverlay(true);
@@ -270,41 +359,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('canplay', handleCanPlay);
     };
-  }, []);
+  }, [handlePlay, handlePause]);
 
-  // Controls visibility
-  const showControlsTemporarily = useCallback(() => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) setShowControls(false);
-    }, 3000);
-  }, [isPlaying]);
-
-  // Handle fullscreen change events
   useEffect(() => {
+    const doc = document as DocumentExtension;
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
       );
       setIsFullscreen(isCurrentlyFullscreen);
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    (document as any).addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    (document as any).addEventListener('mozfullscreenchange', handleFullscreenChange);
-    (document as any).addEventListener('msfullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      (document as any).removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      (document as any).removeEventListener('mozfullscreenchange', handleFullscreenChange);
-      (document as any).removeEventListener('msfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
     };
   }, []);
 
@@ -319,82 +397,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, []);
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play().catch((error) => {
-          if (error.name !== 'AbortError') {
-            console.error('Play error:', error);
-          }
-        });
-      }
-    }
-  };
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
-    setVolume(newVolume);
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume;
-      setIsMuted(newVolume === 0);
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-
-    const elem = containerRef.current;
-    
-    // Check if already in fullscreen
-    const isCurrentlyFullscreen = !!(
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement
-    );
-
-    if (!isCurrentlyFullscreen) {
-      // Enter fullscreen
-      const requestFullscreen = 
-        elem.requestFullscreen ||
-        (elem as any).webkitRequestFullscreen ||
-        (elem as any).mozRequestFullScreen ||
-        (elem as any).msRequestFullscreen;
-
-      if (requestFullscreen) {
-        requestFullscreen.call(elem).catch((err: Error) => {
-          console.error('Fullscreen request failed:', err);
-        });
-        setIsFullscreen(true);
-      }
-    } else {
-      // Exit fullscreen
-      const exitFullscreen = 
-        document.exitFullscreen ||
-        (document as any).webkitExitFullscreen ||
-        (document as any).mozCancelFullScreen ||
-        (document as any).msExitFullscreen;
-
-      if (exitFullscreen) {
-        exitFullscreen.call(document).catch((err: Error) => {
-          console.error('Exit fullscreen failed:', err);
-        });
-        setIsFullscreen(false);
-      }
-    }
-  };
-
-  const handleRetry = () => {
-    setRetryCount(0);
+  const handleRetry = useCallback(() => {
     setError(null);
     setIsLoading(true);
     setShowLoadingOverlay(true);
@@ -402,12 +405,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-    // Re-trigger the channel loading effect
-    if (channel) {
-      // Force re-render by triggering the channel change
-      setIsLoading(true);
-    }
-  };
+  }, []);
 
   if (!channel) {
     return (
@@ -418,197 +416,83 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }
 
   return (
-    <div
+    <motion.div
       ref={containerRef}
-      className="relative w-full h-full bg-black group"
+      className="relative w-full h-full bg-black group overflow-hidden"
       onMouseMove={showControlsTemporarily}
       onTouchStart={showControlsTemporarily}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
     >
-      {/* Video Element */}
-      <video
+      <motion.video
         ref={videoRef}
-        className="w-full h-full object-cover cursor-pointer"
+        className="absolute inset-0 w-full h-full object-fill cursor-pointer"
         playsInline
         preload="auto"
         crossOrigin="anonymous"
         onDoubleClick={toggleFullscreen}
+        initial={{ scale: 1.1, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
       />
 
+      <AnimatePresence>
+        {showLoadingOverlay && (
+          <VideoLoadingOverlay show={showLoadingOverlay} />
+        )}
+      </AnimatePresence>
 
+      <AnimatePresence>
+        {error && (
+          <VideoErrorOverlay
+            error={error}
+            onRetry={handleRetry}
+            onExit={onExit}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Error Overlay */}
-      {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-40">
-          <div className="relative mb-6">
-            <AlertCircle className="w-16 h-16 text-destructive" />
-          </div>
-          <p className="text-white font-semibold text-center max-w-xs">{error}</p>
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleRetry}
-              className="px-6 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Retry
-            </button>
-            <button
-              onClick={onExit}
-              className="px-6 py-2 rounded-lg bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Controls Overlay */}
-      <div
-        className={`absolute inset-0 transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        {/* Top Gradient */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/80 to-transparent" />
-
-        {/* Top Bar */}
-        <div className="absolute top-0 left-0 right-0 p-2 xs:p-3 md:p-4 flex items-center justify-between">
-          <button
-            onClick={onExit}
-            className="flex items-center gap-2 px-2 xs:px-3 md:px-4 py-1.5 xs:py-2 md:py-2 rounded-lg xs:rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 text-white hover:bg-black/60 transition-colors text-xs xs:text-sm md:text-base min-h-[44px] xs:min-h-[40px] md:min-h-auto"
+      <AnimatePresence>
+        {showControls && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2 }}
+            className="video-controls-animate absolute inset-0"
           >
-            <ArrowLeft className="w-3 xs:w-4 h-3 xs:h-4" />
-            <span className="hidden sm:inline font-medium">Back</span>
-          </button>
-
-          <div className="flex items-center gap-2 xs:gap-3">
-            <div className="text-right hidden sm:block text-xs md:text-base">
-              <h2 className="font-bold text-white line-clamp-1">{channel.name}</h2>
-              {channel.group && (
-                <p className="text-xs md:text-sm text-white/60 line-clamp-1">{channel.group}</p>
-              )}
-            </div>
-            <button
-              onClick={onToggleFavorite}
-              className="p-2 xs:p-3 md:p-3 rounded-lg xs:rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center xs:min-h-[auto] xs:min-w-[auto]"
-            >
-              <Heart
-                className={`w-4 xs:w-5 h-4 xs:h-5 ${
-                  isFavorite ? 'text-accent fill-accent' : 'text-white'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Gradient */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 xs:h-28 md:h-40 bg-gradient-to-t from-black/80 to-transparent" />
-
-        {/* Bottom Controls */}
-        <div className="absolute bottom-0 left-0 right-0 p-2 xs:p-3 md:p-4 space-y-2 xs:space-y-3 md:space-y-4 pb-safe">
-          {/* Main Controls */}
-          <div className="flex items-center justify-center gap-2 xs:gap-3 md:gap-4">
-            <button
-              onClick={onPrevious}
-              className="p-2 xs:p-3 md:p-3 rounded-lg xs:rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center xs:min-h-[auto] xs:min-w-[auto]"
-            >
-              <SkipBack className="w-4 xs:w-5 h-4 xs:h-5 text-white" />
-            </button>
-
-            <button
-              onClick={togglePlay}
-              className="w-12 xs:w-14 md:w-16 h-12 xs:h-14 md:h-16 rounded-full bg-gradient-premium flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
-            >
-              {isPlaying ? (
-                <Pause className="w-5 xs:w-6 md:w-7 h-5 xs:h-6 md:h-7 text-white" fill="white" />
-              ) : (
-                <Play className="w-5 xs:w-6 md:w-7 h-5 xs:h-6 md:h-7 text-white ml-0.5 xs:ml-1" fill="white" />
-              )}
-            </button>
-
-            <button
-              onClick={onNext}
-              className="p-2 xs:p-3 md:p-3 rounded-lg xs:rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center xs:min-h-[auto] xs:min-w-[auto]"
-            >
-              <SkipForward className="w-4 xs:w-5 h-4 xs:h-5 text-white" />
-            </button>
-          </div>
-
-          {/* Secondary Controls */}
-          <div className="flex items-center justify-between gap-2 xs:gap-3">
-            {/* Volume */}
-            <div className="flex items-center gap-1 xs:gap-3 flex-shrink-0">
-              <button
-                onClick={toggleMute}
-                className="p-1.5 xs:p-2 rounded-lg hover:bg-white/10 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center xs:min-h-[auto] xs:min-w-[auto]"
-              >
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="w-4 xs:w-5 h-4 xs:h-5 text-white" />
-                ) : (
-                  <Volume2 className="w-4 xs:w-5 h-4 xs:h-5 text-white" />
-                )}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-24 hidden sm:block"
-              />
-            </div>
-
-            {/* Next Channel Preview */}
-            {nextChannelName && (
-              <div className="hidden md:flex items-center gap-2 text-sm text-white/60">
-                <span>Next:</span>
-                <span className="font-medium text-white">{nextChannelName}</span>
-              </div>
-            )}
-
-            {/* Right Controls */}
-            <div className="flex items-center gap-2">
-              {onShowKeyboard && (
-                <button
-                  onClick={onShowKeyboard}
-                  className="p-2 rounded-lg hover:bg-white/10 transition-colors hidden sm:block"
-                  title="Keyboard shortcuts"
-                >
-                  <Keyboard className="w-5 h-5 text-white" />
-                </button>
-              )}
-              <button
-                onClick={toggleFullscreen}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                {isFullscreen ? (
-                  <Minimize className="w-5 h-5 text-white" />
-                ) : (
-                  <Maximize className="w-5 h-5 text-white" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            <VideoControls
+              channel={channel}
+              nextChannelName={nextChannelName}
+              isPlaying={isPlaying}
+              isMuted={isMuted}
+              volume={volume}
+              isFullscreen={isFullscreen}
+              showControls={showControls}
+              isFavorite={isFavorite}
+              onTogglePlay={togglePlay}
+              onToggleMute={toggleMute}
+              onVolumeChange={handleVolumeChange}
+              onToggleFullscreen={toggleFullscreen}
+              onToggleFavorite={onToggleFavorite}
+              onPrevious={onPrevious}
+              onNext={onNext}
+              onExit={onExit}
+              onShowKeyboard={onShowKeyboard}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
 export default React.memo(VideoPlayer, (prevProps, nextProps) => {
-  // Custom comparison to avoid re-renders when props haven't meaningfully changed
   return (
     prevProps.channel?.id === nextProps.channel?.id &&
     prevProps.nextChannelName === nextProps.nextChannelName &&
-    prevProps.isFavorite === nextProps.isFavorite &&
-    prevProps.onToggleFavorite === nextProps.onToggleFavorite &&
-    prevProps.onNext === nextProps.onNext &&
-    prevProps.onPrevious === nextProps.onPrevious &&
-    prevProps.onMinimize === nextProps.onMinimize &&
-    prevProps.onExit === nextProps.onExit &&
-    prevProps.onShowKeyboard === nextProps.onShowKeyboard
+    prevProps.isFavorite === nextProps.isFavorite
   );
 });
-
-

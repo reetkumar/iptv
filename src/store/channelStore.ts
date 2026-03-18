@@ -69,11 +69,14 @@ export const useChannelStore = create<ChannelStoreState>()(
         favorites: Array.from(state.favorites),
         watchHistory: state.watchHistory,
       }),
-      merge: (persistedState: any, currentState) => ({
-        ...currentState,
-        favorites: new Set(persistedState.favorites || []),
-        watchHistory: persistedState.watchHistory || [],
-      }),
+      merge: (persistedState: unknown, currentState) => {
+        const persisted = persistedState as { favorites?: string[]; watchHistory?: Array<{ channelId: string; timestamp: number; duration: number }> } | undefined;
+        return {
+          ...currentState,
+          favorites: new Set(persisted?.favorites || []),
+          watchHistory: persisted?.watchHistory || [],
+        };
+      },
     }
   )
 );

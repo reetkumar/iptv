@@ -76,8 +76,8 @@ const MobileChannelCard: React.FC<MobileChannelCardProps> = memo(({
   return (
     <div
       onClick={onSelect}
-      className="group relative cursor-pointer transition-all duration-300 active:scale-[0.97]"
-      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+      className="group relative cursor-pointer transition-all duration-150 active:scale-[0.97]"
+      style={{ animationDelay: `${Math.min(index * 15, 150)}ms` }}
     >
       {/* Card Container with rounded corners */}
       <div className="relative rounded-3xl overflow-hidden bg-card border border-border/20 hover:border-primary/30 shadow-sm hover:shadow-md transition-all duration-300">

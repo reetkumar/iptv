@@ -4,7 +4,7 @@
 
 export interface SchemaConfig {
   type: string;
-  [key: string]: any;
+  [key: string]: string | number | boolean | object | undefined;
 }
 
 /**
@@ -115,16 +115,16 @@ export function generateApplicationSchema() {
  * Inject schema markup into the document head
  */
 export function injectSchema(schema: SchemaConfig) {
-  // Remove existing schema if present
-  const existingScript = document.querySelector(`script[data-schema-type="${schema['@type']}"]`);
+  const schemaType = String(schema['@type'] ?? '');
+  
+  const existingScript = document.querySelector(`script[data-schema-type="${schemaType}"]`);
   if (existingScript) {
     existingScript.remove();
   }
 
-  // Create and inject new schema
   const script = document.createElement('script');
   script.type = 'application/ld+json';
-  script.setAttribute('data-schema-type', schema['@type']);
+  script.setAttribute('data-schema-type', schemaType);
   script.textContent = JSON.stringify(schema);
   document.head.appendChild(script);
 }
@@ -132,20 +132,19 @@ export function injectSchema(schema: SchemaConfig) {
 /**
  * Hook to inject multiple schemas on mount
  */
-export function useSchemaMarkup(schemas: SchemaConfig[]) {
-  import('react').then(({ useEffect }) => {
-    useEffect(() => {
-      schemas.forEach(schema => injectSchema(schema));
+import { useEffect } from 'react';
 
-      return () => {
-        // Cleanup: remove injected schemas on unmount
-        schemas.forEach(schema => {
-          const script = document.querySelector(`script[data-schema-type="${schema['@type']}"]`);
-          if (script) {
-            script.remove();
-          }
-        });
-      };
-    }, [schemas]);
-  });
+export function useSchemaMarkup(schemas: SchemaConfig[]) {
+  useEffect(() => {
+    schemas.forEach(schema => injectSchema(schema));
+
+    return () => {
+      schemas.forEach(schema => {
+        const script = document.querySelector(`script[data-schema-type="${schema['@type']}"]`);
+        if (script) {
+          script.remove();
+        }
+      });
+    };
+  }, [schemas]);
 }

@@ -12,7 +12,7 @@ interface DeviceCapabilities {
 }
 
 export function detectDevice(): DeviceCapabilities {
-  const nav = navigator as any;
+  const nav = navigator as Navigator & { deviceMemory?: number; hardwareConcurrency?: number };
   const ua = navigator.userAgent || '';
 
   const deviceMemory: number | null = nav.deviceMemory ?? null;
