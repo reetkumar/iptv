@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import legacy from "@vitejs/plugin-legacy";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
@@ -13,14 +14,21 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    legacy({
+      targets: ["chrome >= 73"],
+      modernTargets: ["chrome >= 73"],
+      modernPolyfills: true,
+    }),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
   build: {
-    target: 'ES2020',
     minify: 'esbuild',
     rollupOptions: {
       output: {
@@ -44,13 +52,31 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('lucide-react')) {
             return 'icons';
           }
-          // Utilities
-          if (id.includes('recharts') || id.includes('date-fns') || id.includes('zod')) {
-            return 'utils';
+          if (id.includes('hls.js')) {
+            return 'hls';
+          }
+          if (id.includes('framer-motion')) {
+            return 'motion';
+          }
+          if (id.includes('@supabase')) {
+            return 'supabase';
+          }
+          // Utilities split to reduce large vendor chunks
+          if (id.includes('recharts')) {
+            return 'charts';
+          }
+          if (id.includes('date-fns')) {
+            return 'date-utils';
+          }
+          if (id.includes('zod')) {
+            return 'validation';
+          }
+          if (id.includes('lodash')) {
+            return 'lodash';
           }
         },
       },
     },
-    chunkSizeWarningLimit: 300,
+    chunkSizeWarningLimit: 550,
   },
 }));

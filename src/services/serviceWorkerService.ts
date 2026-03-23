@@ -5,47 +5,19 @@ export const registerServiceWorker = async () => {
     return;
   }
 
-  if (import.meta.env.DEV) {
+  // Temporary hard-disable in all environments to avoid stale-cache white screens.
+  // Also clean up any old registrations/caches left by previous deploys.
+  try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
-    return;
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch (cleanupError) {
+    console.error('Service worker cleanup failed:', cleanupError);
   }
-
-  try {
-    const registration = await navigator.serviceWorker.register('/service-worker.js', {
-      scope: '/',
-    });
-
-    console.log('Service Worker registered successfully:', registration);
-
-    // Listen for updates
-    registration.addEventListener('updatefound', () => {
-      const newWorker = registration.installing;
-      if (!newWorker) return;
-
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // New service worker is ready, notify user
-          console.log('New version available');
-          notifyUpdate();
-        }
-      });
-    });
-
-    return registration;
-  } catch (error) {
-    console.error('Service Worker registration failed:', error);
-  }
-};
-
-// Notify user of available update
-const notifyUpdate = () => {
-  // Post message to UI
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'UPDATE_AVAILABLE',
-    });
-  }
+  return;
 };
 
 // Skip waiting and reload

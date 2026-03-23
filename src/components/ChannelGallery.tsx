@@ -52,7 +52,7 @@ declare global {
 interface ChannelGalleryProps {
   channels: IPTVChannel[];
   favorites: Set<string>;
-  onSelect: (index: number) => void;
+  onSelect: (channel: IPTVChannel) => void;
   onToggleFavorite: (id: string) => void;
   onRefresh: () => void;
   isLoading?: boolean;
@@ -242,9 +242,8 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
   }, [onRefresh]);
 
   const handleChannelSelect = useCallback((channel: IPTVChannel) => {
-    const index = filteredChannels.findIndex(c => c.id === channel.id);
-    if (index !== -1) onSelect(index);
-  }, [filteredChannels, onSelect]);
+    onSelect(channel);
+  }, [onSelect]);
 
   const scrollToTop = useCallback(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });

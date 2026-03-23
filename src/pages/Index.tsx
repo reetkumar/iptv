@@ -26,7 +26,7 @@ const Index: React.FC = () => {
   const [channels, setChannels] = useState<IPTVChannel[]>([]);
   const [healthyIds, setHealthyIds] = useState<Set<string> | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('gallery');
@@ -57,6 +57,16 @@ const Index: React.FC = () => {
     });
     return hindiEnglish.length > 0 ? hindiEnglish : channels;
   }, [channels]);
+
+  const currentIndex = useMemo(
+    () => (currentChannelId ? filteredChannels.findIndex((channel) => channel.id === currentChannelId) : -1),
+    [currentChannelId, filteredChannels]
+  );
+
+  const currentChannel = useMemo(
+    () => (currentIndex >= 0 ? filteredChannels[currentIndex] : null),
+    [currentIndex, filteredChannels]
+  );
 
   // Group channels by category for categories view
   const channelsByCategory = useMemo(() => {
@@ -288,14 +298,20 @@ const Index: React.FC = () => {
       }
     }});
     keyboardService.addShortcut({ key: 'ArrowLeft', description: 'Previous Channel', action: () => {
-      if (viewMode === 'player' && channels.length > 0) setCurrentIndex((prev) => (prev - 1 + channels.length) % channels.length);
+      if (viewMode === 'player' && filteredChannels.length > 0 && currentIndex >= 0) {
+        const previousIndex = (currentIndex - 1 + filteredChannels.length) % filteredChannels.length;
+        setCurrentChannelId(filteredChannels[previousIndex].id);
+      }
     }});
     keyboardService.addShortcut({ key: 'ArrowRight', description: 'Next Channel', action: () => {
-      if (viewMode === 'player' && filteredChannels.length > 0) setCurrentIndex((prev) => (prev + 1) % filteredChannels.length);
+      if (viewMode === 'player' && filteredChannels.length > 0 && currentIndex >= 0) {
+        const nextIndex = (currentIndex + 1) % filteredChannels.length;
+        setCurrentChannelId(filteredChannels[nextIndex].id);
+      }
     }});
     keyboardService.addShortcut({ key: 'Escape', description: 'Back to Gallery', action: () => setViewMode('gallery') });
     keyboardService.addShortcut({ key: 'h', description: 'Toggle Favorite', action: () => {
-      if (currentIndex >= 0 && filteredChannels[currentIndex]) toggleFavorite(filteredChannels[currentIndex].id);
+      if (currentChannel) toggleFavorite(currentChannel.id);
     }});
     keyboardService.addShortcut({ key: 'm', description: 'Toggle Mute', action: () => {
       const video = document.querySelector('video'); if (video) video.muted = !video.muted;
@@ -304,18 +320,27 @@ const Index: React.FC = () => {
     keyboardService.addShortcut({ key: '?', description: 'Show Shortcuts', action: () => setShowKeyboardShortcuts(true) });
 
     return () => keyboardService.clearShortcuts();
-  }, [preferences.keyboardShortcuts, viewMode, currentIndex, channels, filteredChannels, keyboardService, toggleFavorite]);
+  }, [preferences.keyboardShortcuts, viewMode, currentIndex, filteredChannels, keyboardService, toggleFavorite, currentChannel]);
 
-  const handleNext = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev + 1) % filteredChannels.length); }, [filteredChannels.length]);
-  const handlePrevious = useCallback(() => { if (filteredChannels.length === 0) return; setCurrentIndex((prev) => (prev - 1 + filteredChannels.length) % filteredChannels.length); }, [filteredChannels.length]);
+  const handleNext = useCallback(() => {
+    if (filteredChannels.length === 0 || currentIndex < 0) return;
+    const nextIndex = (currentIndex + 1) % filteredChannels.length;
+    setCurrentChannelId(filteredChannels[nextIndex].id);
+  }, [filteredChannels, currentIndex]);
 
-  const handleSelectChannel = useCallback((index: number) => { 
-    // Ensure index is valid for current filtered channels
-    if (index >= 0 && index < filteredChannels.length) {
-      setCurrentIndex(index);
+  const handlePrevious = useCallback(() => {
+    if (filteredChannels.length === 0 || currentIndex < 0) return;
+    const previousIndex = (currentIndex - 1 + filteredChannels.length) % filteredChannels.length;
+    setCurrentChannelId(filteredChannels[previousIndex].id);
+  }, [filteredChannels, currentIndex]);
+
+  const handleSelectChannel = useCallback((selectedChannel: IPTVChannel) => { 
+    const selectedExists = filteredChannels.some((channel) => channel.id === selectedChannel.id);
+    if (selectedExists) {
+      setCurrentChannelId(selectedChannel.id);
       setViewMode('player');
     }
-  }, [filteredChannels.length]);
+  }, [filteredChannels]);
   
   const handleMinimizePlayer = useCallback(() => setViewMode('mini'), []);
   const handleMaximizePlayer = useCallback(() => setViewMode('player'), []);
@@ -323,22 +348,11 @@ const Index: React.FC = () => {
   const handleExitPlayer = useCallback(() => setViewMode('gallery'), []);
   const handleShowKeyboard = useCallback(() => setShowKeyboardShortcuts(true), []);
 
-  // Use state to track current channel - ensures proper re-render when channel changes
-  const [currentChannel, setCurrentChannel] = useState<IPTVChannel | null>(null);
-  
   // Reset current channel when view changes
   useEffect(() => {
-    setCurrentChannel(null);
-    setCurrentIndex(-1);
+    setCurrentChannelId(null);
   }, [sidebarView]);
 
-  useEffect(() => {
-    if (currentIndex >= 0 && currentIndex < filteredChannels.length) {
-      setCurrentChannel(filteredChannels[currentIndex]);
-    } else {
-      setCurrentChannel(null);
-    }
-  }, [currentIndex, filteredChannels]);
   const nextChannelName = useMemo(() => {
     if (filteredChannels.length === 0 || currentIndex < 0) return null;
     return filteredChannels[(currentIndex + 1) % filteredChannels.length].name;
@@ -349,8 +363,7 @@ const Index: React.FC = () => {
     if (currentChannel) {
       toggleFavorite(currentChannel.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentChannel?.id, toggleFavorite]);
+  }, [currentChannel, toggleFavorite]);
 
   // Transition class for page content
   const transitionClass = transitionDir === 'left'

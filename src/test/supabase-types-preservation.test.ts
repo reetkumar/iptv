@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fc from "fast-check";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +19,24 @@ import { supabase } from "@/integrations/supabase/client";
  */
 
 describe("Supabase Type Definitions Preservation", () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  const originalConsoleError = console.error;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      const [firstArg] = args;
+      const message = String(firstArg ?? "");
+      if (message.includes("Not implemented: navigation")) {
+        return;
+      }
+      originalConsoleError(...args);
+    });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
   describe("Property 2: Authentication operations preserve type signatures", () => {
     it("signUp should accept email, password, and options with correct types", () => {
       fc.assert(

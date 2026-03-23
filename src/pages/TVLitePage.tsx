@@ -127,7 +127,7 @@ const TVLitePage: React.FC = () => {
           style={{ flex: 1, maxWidth: 350, padding: '8px 14px', borderRadius: 20, border: '1px solid #333', background: '#1a1a1a', color: '#fff', fontSize: 14, outline: 'none' }}
         />
         <div style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{filtered.length} ch</div>
-        <a href="/?mode=full" style={{ fontSize: 11, color: '#e11d48', textDecoration: 'none', whiteSpace: 'nowrap' }}>Full Mode →</a>
+        <a href="/?mode=full" style={{ fontSize: 11, color: '#e11d48', textDecoration: 'none', whiteSpace: 'nowrap' }}>Full Mode -&gt;</a>
       </div>
 
       {/* Channel Grid */}
@@ -167,7 +167,7 @@ const TVLitePage: React.FC = () => {
       {playing && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#000', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#111' }}>
-            <button onClick={closePlayer} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#333', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>← Back</button>
+            <button onClick={closePlayer} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#333', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>&lt;- Back</button>
             <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playing.name}</div>
           </div>
           <video ref={videoRef} controls autoPlay playsInline style={{ flex: 1, width: '100%', background: '#000' }} />

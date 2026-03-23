@@ -116,9 +116,29 @@ export class StorageService {
   static importData(jsonString: string): boolean {
     try {
       const data = JSON.parse(jsonString);
-      if (data.favorites) this.saveFavorites(data.favorites);
-      if (data.watchHistory) this.addToWatchHistory(data.watchHistory[0]);
-      if (data.preferences) this.saveUserPreferences(data.preferences);
+
+      if (Array.isArray(data.favorites)) {
+        this.saveFavorites(data.favorites);
+      }
+
+      if (Array.isArray(data.watchHistory)) {
+        const sanitizedHistory = data.watchHistory
+          .filter((item): item is WatchHistoryItem => {
+            return (
+              typeof item?.channelId === 'string' &&
+              typeof item?.channelName === 'string' &&
+              typeof item?.timestamp === 'number' &&
+              typeof item?.duration === 'number'
+            );
+          })
+          .slice(0, 50);
+        localStorage.setItem(KEYS.WATCH_HISTORY, JSON.stringify(sanitizedHistory));
+      }
+
+      if (data.preferences) {
+        this.saveUserPreferences({ ...DEFAULT_PREFERENCES, ...data.preferences });
+      }
+
       return true;
     } catch {
       return false;

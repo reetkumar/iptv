@@ -58,6 +58,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const [isPortrait, setIsPortrait] = useState(() => window.innerHeight > window.innerWidth);
 
   useEffect(() => {
@@ -187,6 +188,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     let retries = 0;
     const maxRetries = 2;
 
+    let nativeLoadedMetadataHandler: (() => void) | null = null;
+
     const loadStream = () => {
       if (!isComponentMounted) return;
       
@@ -269,7 +272,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = channel.url;
-        video.addEventListener('loadedmetadata', () => {
+        nativeLoadedMetadataHandler = () => {
           if (!isComponentMounted) return;
           if (loadTimeoutRef.current) {
             clearTimeout(loadTimeoutRef.current);
@@ -283,7 +286,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               }
             });
           }
-        });
+        };
+        video.addEventListener('loadedmetadata', nativeLoadedMetadataHandler);
       } else {
         setError('HLS not supported in this browser');
         setIsLoading(false);
@@ -320,9 +324,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (nativeLoadedMetadataHandler) {
+        video.removeEventListener('loadedmetadata', nativeLoadedMetadataHandler);
+      }
       video.pause();
     };
-  }, [channel]);
+  }, [channel, retryToken]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -401,6 +408,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setError(null);
     setIsLoading(true);
     setShowLoadingOverlay(true);
+    setRetryToken((prev) => prev + 1);
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;

@@ -2,7 +2,7 @@
 
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_NAME = 'reet-tv-v1';
+const CACHE_NAME = 'reet-tv-v2';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -45,31 +45,73 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) {
-        return response;
-      }
+  const requestUrl = new URL(event.request.url);
+  const isNavigation = event.request.mode === 'navigate';
+  const isStaticAsset = requestUrl.pathname.startsWith('/assets/');
 
-      return fetch(event.request)
+  // Always prefer network for page navigations to avoid stale white screens after deploys.
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          // Don't cache non-successful responses
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response;
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put('/index.html', responseToCache);
+            });
           }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          // Cache the response for future requests
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-
           return response;
         })
-        .catch(() => {
-          // Fallback for offline
+        .catch(async () => {
+          const cached = await caches.match('/index.html');
+          return (
+            cached ||
+            new Response('Offline', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: new Headers({ 'Content-Type': 'text/plain' }),
+            })
+          );
+        })
+    );
+    return;
+  }
+
+  // Static assets: cache-first for performance.
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Other same-origin requests: network-first.
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (!response || response.status !== 200 || response.type === 'error') {
+          return response;
+        }
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
           return new Response(
             JSON.stringify({
               error: 'You are offline. Some features may be limited.',
@@ -83,7 +125,7 @@ self.addEventListener('fetch', (event) => {
             }
           );
         });
-    })
+      })
   );
 });
 
