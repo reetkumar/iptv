@@ -1,22 +1,11 @@
 import React from "react";
-import { autoRedirectLite } from "./lib/deviceDetection";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
+import "./index.css";
 
-async function bootstrap() {
-  if (!autoRedirectLite()) {
-    const [{ createRoot }, { default: App }, { default: ErrorBoundary }] = await Promise.all([
-      import("react-dom/client"),
-      import("./App"),
-      import("./components/ErrorBoundary"),
-    ]);
-    
-    await import("./index.css");
-    
-    createRoot(document.getElementById("root")!).render(
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    );
-  }
-}
-
-bootstrap();
+createRoot(document.getElementById("root")!).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
