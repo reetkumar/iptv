@@ -25,8 +25,11 @@ const NotificationCenter = () => {
 };
 
 const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-screen bg-background">
-    <div className="h-12 w-12 rounded-full bg-primary/50 animate-pulse"></div>
+  <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+    <div className="flex flex-col items-center gap-4">
+      <div className="h-12 w-12 rounded-full bg-primary/50 animate-pulse"></div>
+      <p className="text-sm text-muted-foreground">Loading REET TV...</p>
+    </div>
   </div>
 );
 
