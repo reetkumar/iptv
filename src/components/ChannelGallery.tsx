@@ -6,7 +6,10 @@ import { ChannelGridSkeleton } from './ChannelCardSkeleton';
 import HeroBanner from './HeroBanner';
 import CategoryRow from './CategoryRow';
 import VirtualizedChannelGrid from './VirtualizedChannelGrid';
+import MobileGrid from './MobileGrid';
+import MobileTabs from './MobileTabs';
 import { useDebounce } from '../hooks/useDebounce';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -92,6 +95,7 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
 
   const supportsVoice = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) as boolean;
   const showFavoritesOnly = activeView === 'favorites';
+  const isMobile = useIsMobile();
 
   const toggleVoiceSearch = useCallback(() => {
     if (isListening) {
@@ -322,6 +326,13 @@ const ChannelGallery: React.FC<ChannelGalleryProps> = memo(({
       <main className="px-4 sm:px-5 py-4 sm:py-5">
         {isLoading && channels.length === 0 ? (
           <ChannelGridSkeleton count={24} />
+        ) : isMobile ? (
+          <MobileTabs
+            channels={filteredChannels}
+            favorites={favorites}
+            onSelect={onSelect}
+            onToggleFavorite={onToggleFavorite}
+          />
         ) : (
           <>
             {showCategoryView && (

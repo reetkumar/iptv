@@ -36,6 +36,25 @@ interface VideoPlayerProps {
   onShowKeyboard?: () => void;
 }
 
+const HLS_HINTS = ['.m3u8', '.m3u', 'mpegurl'];
+const DIRECT_MEDIA_EXTENSIONS = ['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.m4v'];
+
+const getPlaybackMode = (url: string) => {
+  const normalizedUrl = url.toLowerCase();
+  const isHls = HLS_HINTS.some((hint) => normalizedUrl.includes(hint));
+  const isDirectMedia = DIRECT_MEDIA_EXTENSIONS.some((extension) => normalizedUrl.includes(extension));
+
+  if (isHls) {
+    return 'hls';
+  }
+
+  if (isDirectMedia) {
+    return 'native';
+  }
+
+  return 'unknown';
+};
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
   channel,
   nextChannelName,
@@ -49,6 +68,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastTapRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -76,6 +96,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handlePlay = useCallback(() => setIsPlaying(true), []);
   const handlePause = useCallback(() => setIsPlaying(false), []);
@@ -158,6 +179,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
+  const handleSurfaceTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    showControlsTemporarily();
+    if (event.touches.length !== 1) return;
+
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      toggleFullscreen();
+      lastTapRef.current = 0;
+      return;
+    }
+
+    lastTapRef.current = now;
+  }, [showControlsTemporarily, toggleFullscreen]);
+
   useEffect(() => {
     if (!channel || !videoRef.current) return;
 
@@ -189,11 +224,65 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const maxRetries = 2;
 
     let nativeLoadedMetadataHandler: (() => void) | null = null;
+    let nativeErrorHandler: (() => void) | null = null;
+    const playbackMode = getPlaybackMode(channel.url);
+
+    const finishWithError = (message: string, autoAdvance = false) => {
+      if (!isComponentMounted) return;
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+      if (overlayTimeoutRef.current) {
+        clearTimeout(overlayTimeoutRef.current);
+        overlayTimeoutRef.current = null;
+      }
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+      setShowLoadingOverlay(false);
+      setIsLoading(false);
+      setError(message);
+      if (autoAdvance) {
+        autoAdvanceTimeoutRef.current = setTimeout(() => {
+          if (!isComponentMounted) return;
+          onNext();
+        }, 1200);
+      }
+    };
 
     const loadStream = () => {
       if (!isComponentMounted) return;
-      
-      if (Hls.isSupported()) {
+      video.removeAttribute('src');
+      video.load();
+
+      if (playbackMode === 'native') {
+        video.src = channel.url;
+        nativeLoadedMetadataHandler = () => {
+          if (!isComponentMounted) return;
+          if (loadTimeoutRef.current) {
+            clearTimeout(loadTimeoutRef.current);
+            loadTimeoutRef.current = null;
+          }
+          setIsLoading(false);
+          if (video.paused) {
+            video.play().catch((error) => {
+              if (error.name !== 'AbortError') {
+                console.error('Play error:', error);
+              }
+            });
+          }
+        };
+        nativeErrorHandler = () => {
+          finishWithError('This stream format is not playable. Switching to the next channel...', true);
+        };
+        video.addEventListener('loadedmetadata', nativeLoadedMetadataHandler);
+        video.addEventListener('error', nativeErrorHandler);
+        return;
+      }
+
+      if (playbackMode === 'hls' && Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
@@ -256,13 +345,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               }
               setTimeout(loadStream, 2000);
             } else {
-              if (loadTimeoutRef.current) {
-                clearTimeout(loadTimeoutRef.current);
-                loadTimeoutRef.current = null;
-              }
-              setShowLoadingOverlay(false);
-              setError('Stream unavailable or offline. Try another channel.');
-              setIsLoading(false);
+              finishWithError('Stream unavailable or offline. Switching to the next channel...', true);
               if (hlsRef.current === hls) {
                 hls.destroy();
                 hlsRef.current = null;
@@ -270,7 +353,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             }
           }
         });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      } else if (playbackMode === 'hls' && video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = channel.url;
         nativeLoadedMetadataHandler = () => {
           if (!isComponentMounted) return;
@@ -287,10 +370,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             });
           }
         };
+        nativeErrorHandler = () => {
+          finishWithError('Stream unavailable or offline. Switching to the next channel...', true);
+        };
         video.addEventListener('loadedmetadata', nativeLoadedMetadataHandler);
+        video.addEventListener('error', nativeErrorHandler);
       } else {
-        setError('HLS not supported in this browser');
-        setIsLoading(false);
+        finishWithError('This stream uses an unsupported format. Switching to the next channel...', true);
       }
     };
 
@@ -304,9 +390,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     loadTimeoutRef.current = setTimeout(() => {
       if (isComponentMounted) {
-        setShowLoadingOverlay(false);
-        setIsLoading(false);
-        setError('Stream is taking too long. Please try another channel.');
+        finishWithError('Stream is taking too long. Switching to the next channel...', true);
       }
     }, 30000);
 
@@ -320,6 +404,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         clearTimeout(overlayTimeoutRef.current);
         overlayTimeoutRef.current = null;
       }
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -327,9 +415,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (nativeLoadedMetadataHandler) {
         video.removeEventListener('loadedmetadata', nativeLoadedMetadataHandler);
       }
+      if (nativeErrorHandler) {
+        video.removeEventListener('error', nativeErrorHandler);
+      }
       video.pause();
     };
-  }, [channel, retryToken]);
+  }, [channel, onNext, retryToken]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -401,13 +492,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (overlayTimeoutRef.current) {
         clearTimeout(overlayTimeoutRef.current);
       }
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+      }
     };
-  }, []);
+  }, [onNext]);
 
   const handleRetry = useCallback(() => {
     setError(null);
     setIsLoading(true);
     setShowLoadingOverlay(true);
+    if (autoAdvanceTimeoutRef.current) {
+      clearTimeout(autoAdvanceTimeoutRef.current);
+      autoAdvanceTimeoutRef.current = null;
+    }
     setRetryToken((prev) => prev + 1);
     if (hlsRef.current) {
       hlsRef.current.destroy();
@@ -428,7 +526,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       ref={containerRef}
       className={`relative w-full h-full bg-black group overflow-hidden ${isPortrait && isFullscreen ? 'flex items-center justify-center' : ''}`}
       onMouseMove={showControlsTemporarily}
-      onTouchStart={showControlsTemporarily}
+      onDoubleClick={toggleFullscreen}
+      onTouchStart={handleSurfaceTouchStart}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -436,11 +535,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     >
       <motion.video
         ref={videoRef}
-        className={`${isPortrait && isFullscreen ? 'w-auto h-auto max-w-full max-h-full object-contain' : 'absolute inset-0 w-full h-full object-fill'} cursor-pointer`}
+        className={`${isPortrait && isFullscreen ? 'w-auto h-auto max-w-full max-h-full object-contain' : 'absolute inset-0 w-full h-full object-fill'} cursor-pointer saturate-[1.28] contrast-[1.08] brightness-[1.03]`}
         playsInline
         preload="auto"
         crossOrigin="anonymous"
-        onDoubleClick={toggleFullscreen}
         initial={{ scale: 1.1, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}

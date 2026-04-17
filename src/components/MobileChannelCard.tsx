@@ -121,10 +121,13 @@ const MobileChannelCard: React.FC<MobileChannelCardProps> = memo(({
           </div>
 
           {/* LIVE badge - top left */}
-          <div className="absolute top-3 left-3 z-20">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase bg-destructive/90 text-destructive-foreground backdrop-blur-sm shadow-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-destructive-foreground animate-pulse" />
-              Live
+          <div className="absolute top-2 left-2 z-20">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-600/40">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+              </span>
+              LIVE
             </span>
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, memo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { IPTVChannel } from '../types';
 import ChannelCard from './ChannelCard';
@@ -12,7 +12,7 @@ interface CategoryRowProps {
   onToggleFavorite: (id: string) => void;
 }
 
-const CategoryRow: React.FC<CategoryRowProps> = ({
+const CategoryRow: React.FC<CategoryRowProps> = memo(({
   title,
   channels,
   favorites,
@@ -67,6 +67,14 @@ const CategoryRow: React.FC<CategoryRowProps> = ({
       </div>
     </MotionDiv>
   );
-};
+}, (prev, next) => (
+  prev.title === next.title &&
+  prev.channels.length === next.channels.length &&
+  prev.favorites === next.favorites &&
+  prev.onSelect === next.onSelect &&
+  prev.onToggleFavorite === next.onToggleFavorite
+));
+
+CategoryRow.displayName = 'CategoryRow';
 
 export default CategoryRow;

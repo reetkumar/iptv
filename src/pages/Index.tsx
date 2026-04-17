@@ -5,8 +5,9 @@ import { StorageService } from '../services/storageService';
 import { ChannelHealthService } from '../services/channelHealthService';
 import { KeyboardService } from '../services/keyboardService';
 import { useSEO } from '../hooks/useSEO';
+import { useChannelStore } from '../store/channelStore';
+import { SidebarView } from '../store/uiStore';
 import ChannelGallery from '../components/ChannelGallery';
-import AppSidebar, { SidebarView } from '../components/AppSidebar';
 import BottomNavBar from '../components/BottomNavBar';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { Loader2, AlertCircle, Tv, RefreshCw } from 'lucide-react';
@@ -23,9 +24,15 @@ type ViewMode = 'gallery' | 'player' | 'mini';
 const VIEW_ORDER: SidebarView[] = ['home', 'trending', 'favorites', 'categories'];
 
 const Index: React.FC = () => {
-  const [channels, setChannels] = useState<IPTVChannel[]>([]);
-  const [healthyIds, setHealthyIds] = useState<Set<string> | null>(null);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const {
+    channels,
+    favorites,
+    healthyChannelIds,
+    setChannels,
+    setHealthyChannelIds,
+    toggleFavorite,
+    addToWatchHistory,
+  } = useChannelStore();
   const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +55,10 @@ const Index: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const healthCheckRunning = useRef(false);
   const healthCheckAbortRef = useRef<AbortController | null>(null);
+  const playbackSessionRef = useRef<{ channel: IPTVChannel | null; startedAt: number | null }>({
+    channel: null,
+    startedAt: null,
+  });
 
   // Filter to only Hindi and English channels
   const filteredChannels = useMemo(() => {
@@ -148,10 +159,6 @@ const Index: React.FC = () => {
         setIsLoading(true);
         setError(null);
 
-        // Load favorites first - fast localStorage read
-        const savedFavorites = StorageService.getFavorites();
-        setFavorites(new Set(savedFavorites));
-
         // Show cached channels IMMEDIATELY for instant display
         const cached = ChannelHealthService.getCachedChannels();
         if (cached && cached.length > 0 && !isCancelled) {
@@ -175,7 +182,7 @@ const Index: React.FC = () => {
           });
 
         // Start background health check IMMEDIATELY (doesn't block UI)
-        const healthCheckPromise = (async () => {
+        void (async () => {
           if (healthCheckRunning.current) return;
           healthCheckRunning.current = true;
           
@@ -191,7 +198,7 @@ const Index: React.FC = () => {
               cachedChannels,
               (newHealthyIds) => {
                 if (!abortSignal.aborted && !isCancelled) {
-                  setHealthyIds(newHealthyIds);
+                  setHealthyChannelIds(newHealthyIds);
                 }
               },
               15 // Faster batch processing
@@ -231,24 +238,24 @@ const Index: React.FC = () => {
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey]);
+  }, [refreshKey, setChannels, setHealthyChannelIds]);
 
   useEffect(() => {
-    if (healthyIds === null) return;
+    if (healthyChannelIds === null) return;
     // Debounce the channel update to batch multiple health check updates
     const timeoutId = setTimeout(() => {
       setChannels((prevChannels) => {
         // Sort channels with healthy ones first, but keep ALL channels available
         const sorted = [...prevChannels].sort((a, b) => {
-          const aHealthy = healthyIds.has(a.id) ? 0 : 1;
-          const bHealthy = healthyIds.has(b.id) ? 0 : 1;
+          const aHealthy = healthyChannelIds.has(a.id) ? 0 : 1;
+          const bHealthy = healthyChannelIds.has(b.id) ? 0 : 1;
           return aHealthy - bHealthy;
         });
         return sorted;
       });
     }, 500); // Batch updates every 500ms to prevent UI thrashing
     return () => clearTimeout(timeoutId);
-  }, [healthyIds]);
+  }, [healthyChannelIds, setChannels]);
 
   const handleRefresh = useCallback(() => {
     localStorage.removeItem('iptv_channel_health_v2');
@@ -270,21 +277,11 @@ const Index: React.FC = () => {
       }
     };
   }, [keyboardService]);
-  useEffect(() => { StorageService.saveFavorites(Array.from(favorites)); }, [favorites]);
 
   const handlePreferencesChange = (newPreferences: UserPreferences) => {
     setPreferences(newPreferences);
     StorageService.saveUserPreferences(newPreferences);
   };
-
-  const toggleFavorite = useCallback((channelId: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(channelId)) next.delete(channelId);
-      else next.add(channelId);
-      return next;
-    });
-  }, []);
 
   useEffect(() => {
     if (!preferences.keyboardShortcuts) { keyboardService.setEnabled(false); return; }
@@ -353,6 +350,51 @@ const Index: React.FC = () => {
     setCurrentChannelId(null);
   }, [sidebarView]);
 
+  const flushPlaybackSession = useCallback((endedAt = Date.now()) => {
+    const activeChannel = playbackSessionRef.current.channel;
+    const startedAt = playbackSessionRef.current.startedAt;
+    if (!activeChannel || startedAt === null) return;
+
+    const duration = Math.max(0, Math.round((endedAt - startedAt) / 1000));
+    if (duration >= 10) {
+      addToWatchHistory({
+        channelId: activeChannel.id,
+        channelName: activeChannel.name,
+        timestamp: endedAt,
+        duration,
+        logo: activeChannel.logo,
+      });
+    }
+
+    playbackSessionRef.current = { channel: null, startedAt: null };
+  }, [addToWatchHistory]);
+
+  useEffect(() => {
+    if (viewMode !== 'player' && viewMode !== 'mini') {
+      flushPlaybackSession();
+      return;
+    }
+
+    if (!currentChannel) {
+      return;
+    }
+
+    const activeId = playbackSessionRef.current.channel?.id;
+    if (activeId !== currentChannel.id) {
+      flushPlaybackSession();
+      playbackSessionRef.current = {
+        channel: currentChannel,
+        startedAt: Date.now(),
+      };
+    }
+  }, [currentChannel, flushPlaybackSession, viewMode]);
+
+  useEffect(() => {
+    return () => {
+      flushPlaybackSession();
+    };
+  }, [flushPlaybackSession]);
+
   const nextChannelName = useMemo(() => {
     if (filteredChannels.length === 0 || currentIndex < 0) return null;
     return filteredChannels[(currentIndex + 1) % filteredChannels.length].name;
@@ -414,16 +456,6 @@ const Index: React.FC = () => {
 
   return (
     <div className="h-screen w-full overflow-hidden bg-background text-foreground flex">
-      {/* Mobile sidebar - hidden for all devices */}
-      {/* <AppSidebar
-        activeView={sidebarView}
-        onViewChange={handleViewChange}
-        onOpenSettings={() => setShowSettings(true)}
-        onOpenShortcuts={() => setShowKeyboardShortcuts(true)}
-        favoritesCount={favorites.size}
-      /> */}
-
-      {/* Main content */}
       <div
         className="flex-1 min-w-0 flex flex-col"
         {...swipeHandlers}

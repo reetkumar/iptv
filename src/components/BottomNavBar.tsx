@@ -1,6 +1,6 @@
 import React from 'react';
 import { Home, Flame, Heart, Grid3X3, Settings } from 'lucide-react';
-import { SidebarView } from './AppSidebar';
+import { SidebarView } from '@/store/uiStore';
 
 interface BottomNavBarProps {
   activeView: SidebarView;

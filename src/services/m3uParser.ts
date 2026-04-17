@@ -1,5 +1,27 @@
 import { IPTVChannel } from '../types';
 
+const UNSUPPORTED_STREAM_PATTERNS = [
+  'youtube.com',
+  'youtu.be',
+  'twitch.tv',
+  'facebook.com',
+  'instagram.com',
+];
+
+function isPlayableStreamUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
+
+    const normalizedUrl = url.toLowerCase();
+    return !UNSUPPORTED_STREAM_PATTERNS.some((pattern) => normalizedUrl.includes(pattern));
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchAndParseM3U(url: string): Promise<IPTVChannel[]> {
   try {
     const response = await fetch(url);
@@ -58,15 +80,17 @@ function parseM3U(content: string): IPTVChannel[] {
         };
       }
     } else if (currentChannel?.name) {
-      channels.push({
-        id: generateId(currentChannel.name, line),
-        name: currentChannel.name,
-        url: line,
-        logo: currentChannel.logo,
-        group: currentChannel.group,
-        language: currentChannel.language,
-        country: currentChannel.country,
-      });
+      if (isPlayableStreamUrl(line)) {
+        channels.push({
+          id: generateId(currentChannel.name, line),
+          name: currentChannel.name,
+          url: line,
+          logo: currentChannel.logo,
+          group: currentChannel.group,
+          language: currentChannel.language,
+          country: currentChannel.country,
+        });
+      }
       currentChannel = null;
     }
   }

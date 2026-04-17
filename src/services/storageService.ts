@@ -6,6 +6,7 @@ const KEYS = {
   PREFERENCES: 'iptv_user_preferences_v1',
   STREAM_HEALTH: 'iptv_stream_health_v1',
   BANDWIDTH: 'iptv_bandwidth_usage_v1',
+  CHANNEL_STORE: 'channel-store',
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -17,8 +18,53 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export class StorageService {
+  private static getChannelStoreState(): { favorites: string[]; watchHistory: WatchHistoryItem[] } {
+    try {
+      const raw = localStorage.getItem(KEYS.CHANNEL_STORE);
+      if (!raw) {
+        return { favorites: [], watchHistory: [] };
+      }
+
+      const parsed = JSON.parse(raw) as {
+        state?: { favorites?: string[]; watchHistory?: WatchHistoryItem[] };
+      };
+
+      return {
+        favorites: Array.isArray(parsed.state?.favorites) ? parsed.state!.favorites : [],
+        watchHistory: Array.isArray(parsed.state?.watchHistory) ? parsed.state!.watchHistory : [],
+      };
+    } catch {
+      return { favorites: [], watchHistory: [] };
+    }
+  }
+
+  private static saveChannelStoreState(state: { favorites: string[]; watchHistory: WatchHistoryItem[] }): void {
+    try {
+      const raw = localStorage.getItem(KEYS.CHANNEL_STORE);
+      const parsed = raw ? JSON.parse(raw) as { state?: Record<string, unknown>; version?: number } : {};
+      localStorage.setItem(
+        KEYS.CHANNEL_STORE,
+        JSON.stringify({
+          ...parsed,
+          state: {
+            ...parsed.state,
+            favorites: state.favorites,
+            watchHistory: state.watchHistory,
+          },
+        })
+      );
+    } catch (error) {
+      console.error('Failed to save channel store data:', error);
+    }
+  }
+
   // Favorites
   static getFavorites(): string[] {
+    const storeFavorites = this.getChannelStoreState().favorites;
+    if (storeFavorites.length > 0) {
+      return storeFavorites;
+    }
+
     try {
       const data = localStorage.getItem(KEYS.FAVORITES);
       return data ? JSON.parse(data) : [];
@@ -28,6 +74,11 @@ export class StorageService {
   }
 
   static saveFavorites(favorites: string[]): void {
+    this.saveChannelStoreState({
+      ...this.getChannelStoreState(),
+      favorites,
+    });
+
     try {
       localStorage.setItem(KEYS.FAVORITES, JSON.stringify(favorites));
     } catch (error) {
@@ -37,6 +88,11 @@ export class StorageService {
 
   // Watch History
   static getWatchHistory(): WatchHistoryItem[] {
+    const storeHistory = this.getChannelStoreState().watchHistory;
+    if (storeHistory.length > 0) {
+      return storeHistory;
+    }
+
     try {
       const data = localStorage.getItem(KEYS.WATCH_HISTORY);
       return data ? JSON.parse(data) : [];
@@ -46,6 +102,13 @@ export class StorageService {
   }
 
   static addToWatchHistory(item: WatchHistoryItem): void {
+    const channelStore = this.getChannelStoreState();
+    const nextHistory = [item, ...channelStore.watchHistory.filter((entry) => entry.channelId !== item.channelId)].slice(0, 100);
+    this.saveChannelStoreState({
+      ...channelStore,
+      watchHistory: nextHistory,
+    });
+
     try {
       const history = this.getWatchHistory();
       // Remove duplicate if exists
@@ -59,6 +122,10 @@ export class StorageService {
   }
 
   static clearWatchHistory(): void {
+    this.saveChannelStoreState({
+      ...this.getChannelStoreState(),
+      watchHistory: [],
+    });
     localStorage.removeItem(KEYS.WATCH_HISTORY);
   }
 

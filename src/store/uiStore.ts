@@ -31,6 +31,14 @@ export interface UIState {
   setMiniPlayerSize: (size: { width: number; height: number }) => void;
 }
 
+const getDefaultMiniPlayerPosition = () => {
+  if (typeof window === 'undefined') {
+    return { x: 20, y: 20 };
+  }
+
+  return { x: Math.max(20, window.innerWidth - 320), y: Math.max(20, window.innerHeight - 240) };
+};
+
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
@@ -42,7 +50,7 @@ export const useUIStore = create<UIState>()(
       showKeyboardHelp: false,
       showSearchAdvanced: false,
       searchQuery: '',
-      miniPlayerPosition: { x: window.innerWidth - 320, y: window.innerHeight - 240 },
+      miniPlayerPosition: getDefaultMiniPlayerPosition(),
       miniPlayerSize: { width: 300, height: 200 },
 
       setViewMode: (viewMode) => set({ viewMode }),

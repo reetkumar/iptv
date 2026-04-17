@@ -1,20 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { IPTVChannel } from '@/types';
+import { IPTVChannel, WatchHistoryItem } from '@/types';
 
 export interface ChannelStoreState {
   channels: IPTVChannel[];
   favorites: Set<string>;
-  watchHistory: Array<{ channelId: string; timestamp: number; duration: number }>;
+  watchHistory: WatchHistoryItem[];
   healthyChannelIds: Set<string> | null;
   isLoadingChannels: boolean;
   channelError: string | null;
 
   // Actions
-  setChannels: (channels: IPTVChannel[]) => void;
+  setChannels: (channels: IPTVChannel[] | ((currentChannels: IPTVChannel[]) => IPTVChannel[])) => void;
   setHealthyChannelIds: (ids: Set<string> | null) => void;
   toggleFavorite: (channelId: string) => void;
-  addToWatchHistory: (channelId: string, duration: number) => void;
+  addToWatchHistory: (item: WatchHistoryItem) => void;
   clearWatchHistory: () => void;
   setIsLoadingChannels: (isLoading: boolean) => void;
   setChannelError: (error: string | null) => void;
@@ -31,7 +31,10 @@ export const useChannelStore = create<ChannelStoreState>()(
       isLoadingChannels: false,
       channelError: null,
 
-      setChannels: (channels) => set({ channels }),
+      setChannels: (channels) =>
+        set((state) => ({
+          channels: typeof channels === 'function' ? channels(state.channels) : channels,
+        })),
 
       setHealthyChannelIds: (healthyChannelIds) => set({ healthyChannelIds }),
 
@@ -46,11 +49,11 @@ export const useChannelStore = create<ChannelStoreState>()(
           return { favorites: newFavorites };
         }),
 
-      addToWatchHistory: (channelId, duration) =>
+      addToWatchHistory: (item) =>
         set((state) => {
           const newHistory = [
-            { channelId, timestamp: Date.now(), duration },
-            ...state.watchHistory.filter((item) => item.channelId !== channelId),
+            item,
+            ...state.watchHistory.filter((entry) => entry.channelId !== item.channelId),
           ].slice(0, 100);
           return { watchHistory: newHistory };
         }),
@@ -70,7 +73,10 @@ export const useChannelStore = create<ChannelStoreState>()(
         watchHistory: state.watchHistory,
       }),
       merge: (persistedState: unknown, currentState) => {
-        const persisted = persistedState as { favorites?: string[]; watchHistory?: Array<{ channelId: string; timestamp: number; duration: number }> } | undefined;
+        const persisted = persistedState as {
+          favorites?: string[];
+          watchHistory?: WatchHistoryItem[];
+        } | undefined;
         return {
           ...currentState,
           favorites: new Set(persisted?.favorites || []),

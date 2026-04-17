@@ -25,27 +25,30 @@ export interface AuthState {
   clearError: () => void;
 }
 
-const guestUser: User = {
-  id: 'local-guest',
-  email: 'guest@reet.tv',
-  username: 'Guest User',
-  created_at: new Date(0).toISOString(),
+const LEGACY_GUEST_ID = 'local-guest';
+
+const normalizePersistedUser = (user: User | null | undefined): User | null => {
+  if (!user || user.id === LEGACY_GUEST_ID) {
+    return null;
+  }
+
+  return user;
 };
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: guestUser,
+      user: null,
       session: null,
       isLoading: false,
-      isAuthenticated: true,
+      isAuthenticated: false,
       error: null,
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      setSession: (session) => set({ session }),
+      setSession: (session) => set((state) => ({ session, isAuthenticated: !!state.user && !!session })),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
-      logout: () => set({ user: guestUser, session: null, isAuthenticated: true, error: null }),
+      logout: () => set({ user: null, session: null, isAuthenticated: false, error: null }),
       clearError: () => set({ error: null }),
     }),
     {
@@ -54,6 +57,18 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         session: state.session,
       }),
+      merge: (persistedState: unknown, currentState) => {
+        const persisted = persistedState as { user?: User | null; session?: string | null } | undefined;
+        const user = normalizePersistedUser(persisted?.user);
+        const session = persisted?.session ?? null;
+
+        return {
+          ...currentState,
+          user,
+          session,
+          isAuthenticated: !!user && !!session,
+        };
+      },
     }
   )
 );

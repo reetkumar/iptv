@@ -3,6 +3,20 @@ import Hls from 'hls.js';
 import { X, Maximize2, Pause, Play, Tv } from 'lucide-react';
 import { IPTVChannel } from '../types';
 
+const HLS_HINTS = ['.m3u8', '.m3u', 'mpegurl'];
+const DIRECT_MEDIA_EXTENSIONS = ['.mp4', '.webm', '.ogg', '.ogv', '.mov', '.m4v'];
+
+const getPlaybackMode = (url: string) => {
+  const normalizedUrl = url.toLowerCase();
+  if (HLS_HINTS.some((hint) => normalizedUrl.includes(hint))) {
+    return 'hls';
+  }
+  if (DIRECT_MEDIA_EXTENSIONS.some((extension) => normalizedUrl.includes(extension))) {
+    return 'native';
+  }
+  return 'unknown';
+};
+
 interface MiniPlayerProps {
   channel: IPTVChannel | null;
   isVisible: boolean;
@@ -31,12 +45,16 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({
     if (!isVisible || !channel || !videoRef.current) return;
 
     const video = videoRef.current;
+    const playbackMode = getPlaybackMode(channel.url);
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
     }
 
-    if (Hls.isSupported()) {
+    video.removeAttribute('src');
+    video.load();
+
+    if (playbackMode === 'hls' && Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
       hlsRef.current = hls;
       hls.loadSource(channel.url);
@@ -44,7 +62,10 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         video.play().catch(console.error);
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    } else if (playbackMode === 'hls' && video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = channel.url;
+      video.play().catch(console.error);
+    } else if (playbackMode === 'native') {
       video.src = channel.url;
       video.play().catch(console.error);
     }

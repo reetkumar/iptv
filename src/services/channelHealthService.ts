@@ -58,108 +58,30 @@ export class ChannelHealthService {
   }
 
   static filterHealthyChannels(channels: IPTVChannel[]): IPTVChannel[] {
-    const records = this.getHealthRecords();
-    const healthCheckTTL = 2 * 60 * 60 * 1000; // 2 hours
-
-    return channels.filter(ch => {
-      const record = records[ch.id];
-      // If never checked or check is stale, assume healthy (will be checked in background)
-      if (!record || Date.now() - record.checkedAt > healthCheckTTL) return true;
-      return record.healthy;
-    });
+    // Client-side probes are too unreliable to hide channels from the user.
+    // Health data is treated as advisory metadata only.
+    return channels;
   }
 
-  // Background health check using HLS probe
+  // Surface only recent health metadata; do not probe third-party streams from the browser.
   static async checkChannelsBatch(
     channels: IPTVChannel[],
     onUpdate: (healthyIds: Set<string>) => void,
-    batchSize = 10
+    _batchSize = 10
   ): Promise<void> {
     const records = this.getHealthRecords();
     const healthCheckTTL = 2 * 60 * 60 * 1000;
     const healthyIds = new Set<string>();
-    let lastUpdateHealthyIds: Set<string> | null = null;
 
-    // Identify channels that need checking
-    const toCheck = channels.filter(ch => {
+    channels.forEach((ch) => {
       const record = records[ch.id];
       if (record && Date.now() - record.checkedAt < healthCheckTTL) {
-        if (record.healthy) healthyIds.add(ch.id);
-        return false; // already checked recently
+        if (record.healthy) {
+          healthyIds.add(ch.id);
+        }
       }
-      return true;
     });
 
-    // Helper function to check if Sets have same content
-    const setsEqual = (a: Set<string>, b: Set<string>): boolean => {
-      if (a.size !== b.size) return false;
-      for (const id of a) {
-        if (!b.has(id)) return false;
-      }
-      return true;
-    };
-
-    // Initially report known-healthy channels (only if there are any)
-    if (healthyIds.size > 0) {
-      onUpdate(healthyIds);
-      lastUpdateHealthyIds = new Set(healthyIds);
-    }
-
-    // Process in batches
-    for (let i = 0; i < toCheck.length; i += batchSize) {
-      const batch = toCheck.slice(i, i + batchSize);
-      const results = await Promise.allSettled(
-        batch.map(ch => this.probeChannel(ch))
-      );
-
-      results.forEach((result, idx) => {
-        const ch = batch[idx];
-        const isHealthy = result.status === 'fulfilled' && result.value;
-        records[ch.id] = { healthy: isHealthy, checkedAt: Date.now() };
-        if (isHealthy) healthyIds.add(ch.id);
-      });
-
-      this.saveHealthRecords(records);
-      
-      // Only call onUpdate if there are actually new healthy channels
-      if (!lastUpdateHealthyIds || !setsEqual(healthyIds, lastUpdateHealthyIds)) {
-        onUpdate(new Set(healthyIds));
-        lastUpdateHealthyIds = new Set(healthyIds);
-      }
-
-      // Small delay between batches to avoid flooding
-      if (i + batchSize < toCheck.length) {
-        await new Promise(r => setTimeout(r, 500)); // Increased delay to 500ms for better batching
-      }
-    }
-  }
-
-  private static async probeChannel(channel: IPTVChannel): Promise<boolean> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(channel.url, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: { Range: 'bytes=0-1024' },
-      });
-      clearTimeout(timeout);
-
-      if (!response.ok) return false;
-
-      // For m3u8/HLS streams, check if response contains valid HLS content
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('mpegurl') || channel.url.includes('.m3u8')) {
-        const text = await response.text();
-        return text.includes('#EXTM3U') || text.includes('#EXT-X');
-      }
-
-      // For direct streams, a 200/206 is good enough
-      return response.status === 200 || response.status === 206;
-    } catch {
-      clearTimeout(timeout);
-      return false;
-    }
+    onUpdate(healthyIds);
   }
 }

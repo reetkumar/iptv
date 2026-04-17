@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { registerServiceWorker } from "@/services/serviceWorkerService";
@@ -25,19 +24,6 @@ const NotificationCenter = () => {
   return <NotificationCenterComp />;
 };
 
-// Configure QueryClient for optimal performance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-// Minimal loading fallback for faster perceived performance
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
     <div className="h-12 w-12 rounded-full bg-primary/50 animate-pulse"></div>
@@ -53,7 +39,7 @@ const AppContent = () => {
   return (
     <>
       <NotificationCenter />
-      <Suspense fallback={null}>
+      <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/auth/login" element={<Navigate to="/" replace />} />
           <Route path="/auth/signup" element={<Navigate to="/" replace />} />
@@ -70,20 +56,18 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <Suspense fallback={null}>
-      <UIProviders>
-        <BrowserRouter
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true,
-          }}
-        >
-          <AppContent />
-        </BrowserRouter>
-      </UIProviders>
-    </Suspense>
-  </QueryClientProvider>
+  <Suspense fallback={<LoadingFallback />}>
+    <UIProviders>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <AppContent />
+      </BrowserRouter>
+    </UIProviders>
+  </Suspense>
 );
 
 export default App;

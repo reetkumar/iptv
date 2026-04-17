@@ -41,10 +41,6 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('react-router-dom')) {
             return 'router';
           }
-          // Query chunk
-          if (id.includes('@tanstack/react-query')) {
-            return 'query';
-          }
           // UI components - split into smaller chunks to enable partial loading
           if (id.includes('@radix-ui')) {
             return 'ui-radix';
@@ -57,9 +53,6 @@ export default defineConfig(({ mode }) => ({
           }
           if (id.includes('framer-motion')) {
             return 'motion';
-          }
-          if (id.includes('@supabase')) {
-            return 'supabase';
           }
           // Utilities split to reduce large vendor chunks
           if (id.includes('recharts')) {
